@@ -50,10 +50,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // ======== Subtitlu ========
                 Text(
-                  'Autentifică-te în cont',
+                  'Autentificare',
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: Colors.grey.shade700,
-                    fontSize: 22,
+                    fontSize: 30,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -189,7 +189,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     } catch (e) {
       setState(() {
-        _error = 'Login eșuat: $e';
+        _error = 'Email sau parola incorecta!\n         Încerca-ți din nou.';
       });
     } finally {
       setState(() {
