@@ -12,26 +12,29 @@ class SendBatchUseCase {
   final String patientId;
 
   // Buffer pentru evenimente lente (SensorEvent) primite în ultimele 30 s
-  final List<SensorEvent> _slowBuffer = [];
+  final List<SensorEvent> _buffer = [];
   Timer? _timer;
 
-  SendBatchUseCase(this._sensorRepo, this._cloudRepo,
-      {required this.patientId});
+  SendBatchUseCase(
+      this._sensorRepo,
+      this._cloudRepo, {
+        required this.patientId,
+      });
 
-  /// Începe ascultarea evenimentelor BLE și programarea batch-urilor
+  /// Începe ascultarea evenimentelor BLE și programarea batch-urilor la 30 s
   void start() {
-    // 1) Ne abonăm la fluxul de BleEvent și filtrăm doar SensorEvent:
+    // 1) Ne abonăm la fluxul de BleEvent și filtrăm doar SensorEvent
     _sensorRepo.watchBleEvents().listen((bleEvent) {
       if (bleEvent is SensorEvent) {
         // Adăugăm datele lente la buffer
-        _slowBuffer.add(bleEvent);
+        _buffer.add(bleEvent);
 
         // Dacă detectăm alarmă pe valorile curente, trimitem imediat un BurstData
-        if (_isAlarm(bleEvent)) {
+        /*if (_isAlarm(bleEvent)) {
           _sendImmediateAlarm(bleEvent);
-        }
+        }*/
       }
-      // Dacă e EkgEvent, nu facem nimic aici (Ekg nu contează pentru media de 30 s)
+      // Dacă e EkgEvent, nu adăugăm în buffer (EKG nu contează pentru media de 30 s)
     });
 
     // 2) La fiecare 30 s, calculăm media pe buffer și trimitem un BurstData
@@ -40,7 +43,7 @@ class SendBatchUseCase {
     });
   }
 
-  /// Trimite acum, on-demand, batch-ul curent (fără a aștepta următoarea oră rotundă)
+  /// Trimite imediat, on-demand, batch-ul curent (fără a aștepta următoarea rulare)
   void sendNow() {
     _sendBufferedBatch();
   }
@@ -50,56 +53,70 @@ class SendBatchUseCase {
     _timer?.cancel();
   }
 
-  /// Calculează media pe tot ce e în _slowBuffer și trimite la cloud
+  /// Calculează media pe tot ce e în _buffer și trimite la cloud
   void _sendBufferedBatch() {
-    if (_slowBuffer.isEmpty) return;
+    if (_buffer.isEmpty) return;
 
-    final int count = _slowBuffer.length;
-    final int sumBpm =
-    _slowBuffer.map((e) => e.bpm).reduce((a, b) => a + b);
-    final double sumTemp =
-    _slowBuffer.map((e) => e.temp).reduce((a, b) => a + b);
-    final double sumHum =
-    _slowBuffer.map((e) => e.hum).reduce((a, b) => a + b);
+    final int count = _buffer.length;
+    int sumBpm = 0;
+    double sumTemp = 0.0;
+    double sumHum = 0.0;
+
+    for (var e in _buffer) {
+      sumBpm += e.bpm;
+      sumTemp += e.temp;
+      sumHum += e.hum;
+    }
 
     final int bpmAvg = (sumBpm / count).round();
     final double tempAvg = sumTemp / count;
     final double humAvg = sumHum / count;
+    final DateTime now = DateTime.now();
 
     final burst = BurstData(
+      patientId: patientId,
       bpmAvg: bpmAvg,
       tempAvg: tempAvg,
       humAvg: humAvg,
-      timestamp: DateTime.now(),
+      timestamp: now,
     );
 
-    // Golește buffer-ul
-    _slowBuffer.clear();
+    // Golește buffer-ul după ce am calculat mediile
+    _buffer.clear();
 
-    // Trimite la cloud
-    _cloudRepo.sendBurst(burst).catchError((e) {
-      print('[SendBatchUseCase] Eroare la trimiterea BurstData: $e');
-      // Dacă vrei, poți reintroduce datele în buffer pentru retry
+    // Trimite la cloud și adaugă debug‐prints:
+    _cloudRepo
+        .sendBurstData(patientId, [burst])
+        .then((_) {
+      print(
+        '[SendBatchUseCase] ✅ BurstData trimis cu succes la ${now.toIso8601String()}. '
+            'patientId=$patientId, bpmAvg=$bpmAvg, tempAvg=$tempAvg, humAvg=$humAvg',
+      );
+    })
+        .catchError((error) {
+      print('[SendBatchUseCase] ❌ Eroare la trimiterea BurstData: $error');
     });
   }
 
-  /// În caz de alarmă, trimite imediat un BurstData cu valorile curente
   void _sendImmediateAlarm(SensorEvent se) {
     final burst = BurstData(
+      patientId: patientId,
       bpmAvg: se.bpm,
       tempAvg: se.temp,
       humAvg: se.hum,
       timestamp: DateTime.now(),
     );
-    _cloudRepo.sendBurst(burst).catchError((e) {
-      print('[SendBatchUseCase] Eroare la trimiterea alarmei: $e');
-    });
-  }
 
-  /// Praguri de alarmă: bpm < 40 sau > 150, temp > 38.5
-  bool _isAlarm(SensorEvent se) {
-    if (se.bpm < 40 || se.bpm > 150) return true;
-    if (se.temp > 38.5) return true;
-    return false;
+    _cloudRepo
+        .sendBurstData(patientId, [burst])
+        .then((_) {
+      print(
+        '[SendBatchUseCase] 🚨 Alarmă imediată trimisă cu succes! '
+            'patientId=$patientId, bpm=${se.bpm}, temp=${se.temp}, hum=${se.hum}',
+      );
+    })
+        .catchError((error) {
+      print('[SendBatchUseCase] ❌ Eroare la trimiterea alarmei: $error');
+    });
   }
 }

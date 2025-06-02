@@ -2,18 +2,16 @@
 
 import '../model/auth_token.dart';
 import '../model/login_request.dart';
-import '../model/patient.dart';
+import '../model/burst_data.dart';
 import '../model/recommendation.dart';
 import '../model/alarm.dart';
-import '../model/burst_data.dart';
 
 abstract class CloudRepository {
-
-  // 1) Trimite un BurstData la server
-  Future<void> sendBurst(BurstData burst);
-
-  // 2) Autentificare
+  // 1) LOGIN
   Future<AuthToken> login(LoginRequest credentials);
+
+  // 2) TRIMITERE BURSTDATA (date fiziologice agregate)
+  Future<void> sendBurstData(String patientId, List<BurstData> batch);
 
   // 3) RECOMANDĂRI
   Future<List<Recommendation>> fetchRecommendations(String patientId);
@@ -22,7 +20,4 @@ abstract class CloudRepository {
   // 4) ALARME
   Future<List<Alarm>> fetchAlarms(String patientId);
   Future<void> postAlarm(Alarm alarm);
-
-/// (Opțional, dacă vei implementa alerte)
-// Future<void> sendAlert(AlertData alert);
 }

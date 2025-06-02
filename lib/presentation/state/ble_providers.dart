@@ -7,7 +7,10 @@ import '../../domain/model/ble_event.dart';
 /// 1) Singleton BleService: o singură instanță pe toată durata aplicației.
 final bleServiceProvider = Provider<BleService>((ref) {
   final bleService = BleService();
-  ref.onDispose(() => bleService.dispose());
+  ref.onDispose(() {
+    print('[ble_providers] Disposing BleService...');
+    bleService.dispose();
+  });
   return bleService;
 });
 
@@ -17,9 +20,9 @@ final bleServiceProvider = Provider<BleService>((ref) {
 final bleEventStreamProvider = StreamProvider<BleEvent>((ref) async* {
   final bleService = ref.read(bleServiceProvider);
 
-  print('[Riverpod] Apelează initAndStart() BleService …');
+  print('[ble_providers] ▶️ Pornesc initAndStart() BleService …');
   await bleService.initAndStart();
+  print('[ble_providers] ✅ BleService initAndStart() s-a încheiat. Emit evenimente…');
 
-  print('[Riverpod] initAndStart() a terminat, așteptăm BleEvent-uri…');
   yield* bleService.bleEventStream;
 });

@@ -1,9 +1,10 @@
 // lib/presentation/screen/login_screen.dart
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../domain/model/login_request.dart';
-import '../state/cloud_providers.dart';
+
+import '../state/auth_provider.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -26,143 +27,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Preluăm tema curentă pentru a folosi culori din ThemeData dacă vrem
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ======== Logo-ul ========
-                Image.asset(
-                  'assets/images/Logo_noback.png',
-                  width: 320,
-                  height: 320,
-                ),
-                const SizedBox(height: 16),
-
-                // ======== Subtitlu ========
-                Text(
-                  'Autentificare',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: Colors.grey.shade700,
-                    fontSize: 30,
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // ======== Câmp Username ========
-                TextField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    labelStyle: TextStyle(color: Colors.blue.shade700),
-                    prefixIcon: Icon(Icons.person, color: Colors.blue.shade700),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue.shade700),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ======== Câmp Parolă ========
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: 'Parolă',
-                    labelStyle: TextStyle(color: Colors.blue.shade700),
-                    prefixIcon: Icon(Icons.lock, color: Colors.blue.shade700),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue.shade700),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ======== Afișare eroare, dacă există ========
-                if (_error != null) ...[
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // ======== Buton Login ========
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: _isLoading ? null : _doLogin,
-                    child: _isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                        : const Text(
-                      'Loghează-te',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ======== Opțional: Legătură "Ai uitat parola?" ========
-                // GestureDetector(
-                //   onTap: () {
-                //     // Aici poți deschide ecranul "Recuperare parolă"
-                //   },
-                //   child: Text(
-                //     'Ai uitat parola?',
-                //     style: TextStyle(
-                //       color: Colors.blue.shade700,
-                //       decoration: TextDecoration.underline,
-                //     ),
-                //   ),
-                // ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _doLogin() async {
+  Future<void> _onLoginPressed() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
     if (email.isEmpty || password.isEmpty) {
-      setState(() {
-        _error = 'Completează ambele câmpuri.';
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Te rog completează email și parolă'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
       return;
     }
 
@@ -171,30 +45,197 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
-    try {
-      final loginReq = LoginRequest(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+    // 1) Apelez AuthNotifier.login(...)
+    await ref.read(authNotifierProvider.notifier).login(email, password);
 
-      // Apelează metoda de login din repository
-      final authToken = await ref.read(cloudRepositoryProvider).login(loginReq);
+    // 2) Verific starea de autentificare
+    final authState = ref.read(authStateProvider);
+    authState.maybeWhen(
+      authenticated: (userId, userType) {
+        // Dacă e autentificat, navighez la HomeScreen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      },
+      error: (message) {
+        // Dacă e eroare, afișez în SnackBar și la nivel local
+        setState(() {
+          _error = message;
+        });
+      },
+      orElse: () {
+        // Dacă rămâne initial/unauthenticated, nu fac nimic
+      },
+    );
 
-      // Salvează token-ul în state provider
-      ref.read(authTokenProvider.notifier).state = authToken;
+    setState(() {
+      _isLoading = false;
+    });
+  }
 
-      // După login, redirecționează către HomeScreen
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } catch (e) {
-      setState(() {
-        _error = 'Email sau parola incorecta!\n         Încerca-ți din nou.';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      // 1) Fundal gradient + blur
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFe0e0e0), Color(0xFFffffff)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(color: Colors.white.withOpacity(0.2)),
+          ),
+
+          // 2) Conținutul efectiv — puțin mai sus pe ecran
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Logo
+                    Image.asset(
+                      'assets/images/Logo_noback.png',
+                      width: 280,
+                      height: 280,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Titlul „Autentificare”
+                    Text(
+                      'Autentificare',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Câmp Email (în Card cu umbră)
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      shadowColor: Colors.grey.withOpacity(0.3),
+                      child: TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          hintText: 'Email',
+                          prefixIcon: const Icon(Icons.person),
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Câmp Parolă (în Card cu umbră)
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      shadowColor: Colors.grey.withOpacity(0.3),
+                      child: TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          hintText: 'Parolă',
+                          prefixIcon: const Icon(Icons.lock),
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Afișează eroarea, dacă există
+                    if (_error != null) ...[
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Buton „Loghează-te” (în Material cu umbră)
+                    Material(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      shadowColor: Colors.blue.shade200,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: _isLoading ? null : _onLoginPressed,
+                          child: _isLoading
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : const Text(
+                            'Loghează-te',
+                            style: TextStyle(
+                                fontSize: 16, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    // (Opțional: link „Ai uitat parola?”)
+                    // GestureDetector(
+                    //   onTap: () {},
+                    //   child: Text(
+                    //     'Ai uitat parola?',
+                    //     style: TextStyle(
+                    //       color: Colors.blue.shade700,
+                    //       decoration: TextDecoration.underline,
+                    //     ),
+                    //   ),
+                    // ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

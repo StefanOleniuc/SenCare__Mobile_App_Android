@@ -48,11 +48,14 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<void> sendBurst(BurstData burst) async {
+  Future<void> sendBurstData(
+    String patientId,
+    List<BurstData> batch,
+  ) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
-    final _data = burst;
+    final _data = batch.map((e) => e.toJson()).toList();
     await _dio.fetch<void>(_setStreamType<void>(Options(
       method: 'POST',
       headers: _headers,
@@ -60,7 +63,7 @@ class _ApiService implements ApiService {
     )
         .compose(
           _dio.options,
-          '/sensor/burst',
+          '/api/doctor/pacient/${patientId}/datefiziologice',
           queryParameters: queryParameters,
           data: _data,
         )
