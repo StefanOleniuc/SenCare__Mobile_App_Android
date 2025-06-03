@@ -87,6 +87,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       orElse: () => '',
     );
 
+    print('[HomeScreen] ℹ La initBleAndBatch, patientId = "$userId"');
+
     return Scaffold(
       // Nu mai există floatingActionButton de trimitere manuală
       drawer: _buildDrawer(userId),
