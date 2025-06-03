@@ -3,9 +3,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../state/cloud_providers.dart';  // Provider pentru CloudRepository
 import '../state/auth_provider.dart';
 import 'home_screen.dart';
+import '../../domain/model/login_request.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -45,34 +46,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
-    // 1) Apelez AuthNotifier.login(...)
-    await ref.read(authNotifierProvider.notifier).login(email, password);
+    try {
+      final loginReq = LoginRequest(email: email, password: password);
+      final authToken = await ref.read(cloudRepositoryProvider).login(loginReq);
 
-    // 2) Verific starea de autentificare
-    final authState = ref.read(authStateProvider);
-    authState.maybeWhen(
-      authenticated: (userId, userType) {
-        // Dacă e autentificat, navighez la HomeScreen
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      },
-      error: (message) {
-        // Dacă e eroare, afișez în SnackBar și la nivel local
-        setState(() {
-          _error = message;
-        });
-      },
-      orElse: () {
-        // Dacă rămâne initial/unauthenticated, nu fac nimic
-      },
-    );
-
+    // **Verificăm acum userType**:
+    if (authToken.userType.toLowerCase() != 'pacient') {
+    // Dacă nu e “pacient”, afișăm eroare și oprim procesul de login
     setState(() {
-      _isLoading = false;
+    _error = 'Nu faceți parte din categoria pacienti.\n Pentru autentificare accesati site-ul web!\n            Va mulțumim!';
+    _isLoading = false;
     });
-  }
+    return;
+    }
 
+      // Acum avem, în authToken.userId, ID-ul pacientului:
+      final idPacient = authToken.userId;
+
+      // Salvăm starea de autentificare cu ID-ul respectiv
+      ref.read(authStateProvider.notifier).state =
+          AuthState.authenticated(userId: idPacient);
+
+      // Navigăm la HomeScreen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } catch (e) {
+      setState(() {
+        _error = 'Email sau parolă incorectă.\n           Reîncearcă.';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

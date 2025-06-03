@@ -83,7 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Preluăm userId din AuthState (pentru navigarea la Recomandări, etc.)
     final authState = ref.watch(authStateProvider);
     final userId = authState.maybeWhen(
-      authenticated: (id, userType) => id,
+      authenticated: (id) => id.toString(),
       orElse: () => '',
     );
 

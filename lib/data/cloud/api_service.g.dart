@@ -48,14 +48,15 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<void> sendBurstData(
+  Future<void> sendPhysioData(
     String patientId,
-    List<BurstData> batch,
+    Map<String, dynamic> payload,
   ) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
-    final _data = batch.map((e) => e.toJson()).toList();
+    final _data = <String, dynamic>{};
+    _data.addAll(payload);
     await _dio.fetch<void>(_setStreamType<void>(Options(
       method: 'POST',
       headers: _headers,

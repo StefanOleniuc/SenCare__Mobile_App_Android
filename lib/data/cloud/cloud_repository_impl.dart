@@ -7,6 +7,8 @@ import '../../domain/model/recommendation.dart';
 import '../../domain/model/alarm.dart';
 import '../../domain/repository/cloud_repository.dart';
 import 'api_service.dart';
+import 'dart:convert';
+
 
 class CloudRepositoryImpl implements CloudRepository {
   final ApiService _api;
@@ -18,9 +20,31 @@ class CloudRepositoryImpl implements CloudRepository {
   }
 
   @override
-  Future<void> sendBurstData(String patientId, List<BurstData> batch) {
-    return _api.sendBurstData(patientId, batch);
+  Future<void> sendBurstData(String patientId, BurstData burst) async {
+    // 1) Construim payload cu Puls/Temperatura/Umiditate
+    // 2) Pentru EKG, convertim lista de double la JSON-string
+    final String ecgJsonArray = jsonEncode(burst.ecgValues);
+
+    final Map<String, dynamic> payload = {
+      'Puls'       : burst.bpmAvg,
+      'Temperatura': burst.tempAvg,
+      'Umiditate'  : burst.humAvg,
+      'ECG'        : ecgJsonArray,
+      // NU trimitem Data_timp—backend‐ul va completa automat timestamp‐ul
+    };
+
+    print('[CloudRepository] 🚀 Trimitem date fiziologice → '
+        'pacientID=$patientId, payload=$payload');
+
+    try {
+      await _api.sendPhysioData(patientId, payload);
+      print('[CloudRepository] ✅ Trimis cu succes datele fiziologice.');
+    } catch (e) {
+      print('[CloudRepository] ❌ Eroare la trimiterea datelor fiziologice: $e');
+      rethrow;
+    }
   }
+
 
   @override
   Future<List<Recommendation>> fetchRecommendations(String patientId) {

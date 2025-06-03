@@ -12,8 +12,13 @@ class SendBatchUseCase {
   final String patientId;
 
   // Buffer pentru evenimente lente (SensorEvent) primite în ultimele 30 s
-  final List<SensorEvent> _buffer = [];
+  final List<SensorEvent> _slowBuffer = [];
+
+  // Buffer pentru valorile EKG primite în ultimele 30 s
+  final List<double> _ecgBuffer30s = [];
+
   Timer? _timer;
+
 
   SendBatchUseCase(
       this._sensorRepo,
@@ -27,14 +32,19 @@ class SendBatchUseCase {
     _sensorRepo.watchBleEvents().listen((bleEvent) {
       if (bleEvent is SensorEvent) {
         // Adăugăm datele lente la buffer
-        _buffer.add(bleEvent);
+        _slowBuffer.add(bleEvent);
 
         // Dacă detectăm alarmă pe valorile curente, trimitem imediat un BurstData
         /*if (_isAlarm(bleEvent)) {
           _sendImmediateAlarm(bleEvent);
         }*/
+      }else if (bleEvent is EkgEvent) {
+        // Adaug fiecare valoare EKG la buffer‐ul de 30 s
+        _ecgBuffer30s.add(bleEvent.ekg);
+        print('[SendBatchUseCase] 🔄 EkgEvent primit: ${bleEvent.ekg}');
       }
-      // Dacă e EkgEvent, nu adăugăm în buffer (EKG nu contează pentru media de 30 s)
+    }, onError: (error) {
+      print('[SendBatchUseCase] ❌ Eroare în fluxul BLE: $error');
     });
 
     // 2) La fiecare 30 s, calculăm media pe buffer și trimitem un BurstData
@@ -53,70 +63,85 @@ class SendBatchUseCase {
     _timer?.cancel();
   }
 
-  /// Calculează media pe tot ce e în _buffer și trimite la cloud
+  /// Calculează media, adună lista EKG și trimite la Cloud
   void _sendBufferedBatch() {
-    if (_buffer.isEmpty) return;
-
-    final int count = _buffer.length;
-    int sumBpm = 0;
-    double sumTemp = 0.0;
-    double sumHum = 0.0;
-
-    for (var e in _buffer) {
-      sumBpm += e.bpm;
-      sumTemp += e.temp;
-      sumHum += e.hum;
+    if (_slowBuffer.isEmpty && _ecgBuffer30s.isEmpty) {
+      print('[SendBatchUseCase] ℹ Ambele buffere goale – nu trimit.');
+      return;
     }
 
-    final int bpmAvg = (sumBpm / count).round();
-    final double tempAvg = sumTemp / count;
-    final double humAvg = sumHum / count;
-    final DateTime now = DateTime.now();
+    // 1) dacă avem măcar un SensorEvent, calculăm media
+    int? bpmAvg;
+    double? tempAvg, humAvg;
 
+    if (_slowBuffer.isNotEmpty) {
+      final int count = _slowBuffer.length;
+      final int sumBpm = _slowBuffer.map((e) => e.bpm).reduce((a, b) => a + b);
+      final double sumTemp =
+      _slowBuffer.map((e) => e.temp).reduce((a, b) => a + b);
+      final double sumHum =
+      _slowBuffer.map((e) => e.hum).reduce((a, b) => a + b);
+
+      bpmAvg = (sumBpm / count).round();
+      tempAvg = sumTemp / count;
+      humAvg = sumHum / count;
+    } else {
+      // dacă slowBuffer e gol, setăm valorile cu 0 sau null după cum preferi
+      bpmAvg = 0;
+      tempAvg = 0.0;
+      humAvg = 0.0;
+    }
+
+    // 2) Preluăm lista EKG (poate fi goală, dacă n‐au venit EkgEvent în ultimele 30 s)
+    final List<double> ecgList = List<double>.from(_ecgBuffer30s);
+
+    // 3) Creăm BurstData
     final burst = BurstData(
-      patientId: patientId,
-      bpmAvg: bpmAvg,
-      tempAvg: tempAvg,
-      humAvg: humAvg,
-      timestamp: now,
+      bpmAvg: bpmAvg!,
+      tempAvg: tempAvg!,
+      humAvg: humAvg!,
+      timestamp: DateTime.now(),
+      ecgValues: ecgList,
     );
 
-    // Golește buffer-ul după ce am calculat mediile
-    _buffer.clear();
+    print('[SendBatchUseCase] 📦 Trimitem BurstData ('
+        'countSensor=${_slowBuffer.length}, ecgCount=${ecgList.length}) → $burst');
 
-    // Trimite la cloud și adaugă debug‐prints:
-    _cloudRepo
-        .sendBurstData(patientId, [burst])
-        .then((_) {
-      print(
-        '[SendBatchUseCase] ✅ BurstData trimis cu succes la ${now.toIso8601String()}. '
-            'patientId=$patientId, bpmAvg=$bpmAvg, tempAvg=$tempAvg, humAvg=$humAvg',
-      );
-    })
-        .catchError((error) {
-      print('[SendBatchUseCase] ❌ Eroare la trimiterea BurstData: $error');
+    // Golește buffer-ul după ce am calculat mediile
+    _slowBuffer.clear();
+    _ecgBuffer30s.clear();
+
+    // 5) Trimitem la cloud
+    _cloudRepo.sendBurstData(patientId, burst).catchError((e) {
+      print('[SendBatchUseCase] ❌ Eroare la trimiterea BurstData: $e');
     });
   }
 
+  // Dacă detectăm alarmă pe valorile lente, trimitem imediat un BurstData
   void _sendImmediateAlarm(SensorEvent se) {
+    // Într‐o alarmă, nu avem neapărat EKG buffer, dar trimitem media curentă
     final burst = BurstData(
-      patientId: patientId,
       bpmAvg: se.bpm,
       tempAvg: se.temp,
       humAvg: se.hum,
       timestamp: DateTime.now(),
+      ecgValues: List<double>.from(_ecgBuffer30s),
     );
 
-    _cloudRepo
-        .sendBurstData(patientId, [burst])
-        .then((_) {
-      print(
-        '[SendBatchUseCase] 🚨 Alarmă imediată trimisă cu succes! '
-            'patientId=$patientId, bpm=${se.bpm}, temp=${se.temp}, hum=${se.hum}',
-      );
-    })
-        .catchError((error) {
-      print('[SendBatchUseCase] ❌ Eroare la trimiterea alarmei: $error');
+    print('[SendBatchUseCase] 🚨 Alarmă! BurstData imediat → $burst');
+    _cloudRepo.sendBurstData(patientId, burst).catchError((e) {
+      print('[SendBatchUseCase] ❌ Eroare la trimiterea burstului de alarmă: $e');
     });
+
+    // După alarmă, resetăm bufferele:
+    _slowBuffer.clear();
+    _ecgBuffer30s.clear();
+  }
+
+  /// Pragurile de alarmă (exemplu simplu)
+  bool _isAlarm(SensorEvent se) {
+    if (se.bpm < 40 || se.bpm > 150) return true;
+    if (se.temp > 38.5) return true;
+    return false;
   }
 }

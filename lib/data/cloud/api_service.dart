@@ -21,9 +21,9 @@ abstract class ApiService {
 
   // --- 2) TRIMITERE BURSTDATA ---
   @POST('/api/doctor/pacient/{id}/datefiziologice')
-  Future<void> sendBurstData(
+  Future<void> sendPhysioData(
       @Path('id') String patientId,
-      @Body() List<BurstData> batch,
+      @Body() Map<String, dynamic> payload,
       );
 
   // 4) RECOMANDĂRI

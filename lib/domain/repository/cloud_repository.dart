@@ -11,7 +11,7 @@ abstract class CloudRepository {
   Future<AuthToken> login(LoginRequest credentials);
 
   // 2) TRIMITERE BURSTDATA (date fiziologice agregate)
-  Future<void> sendBurstData(String patientId, List<BurstData> batch);
+  Future<void> sendBurstData(String patientId, BurstData burst);
 
   // 3) RECOMANDĂRI
   Future<List<Recommendation>> fetchRecommendations(String patientId);

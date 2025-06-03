@@ -23,7 +23,7 @@ class SenCareApp extends ConsumerWidget {
       title: 'SenCare',
       theme: ThemeData(primarySwatch: Colors.blue),
       home: authState.maybeWhen(
-        authenticated: (userId, userType) => const HomeScreen(),
+        authenticated: (id) => const HomeScreen(),
         orElse: () => const LoginScreen(),
       ),
     );
