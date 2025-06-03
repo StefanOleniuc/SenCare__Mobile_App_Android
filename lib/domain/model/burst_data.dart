@@ -7,11 +7,11 @@ part 'burst_data.g.dart';
 @freezed
 class BurstData with _$BurstData {
   factory BurstData({
-    @JsonKey(name: 'Puls') required int bpmAvg,
+    @JsonKey(name: 'Puls')       required int bpmAvg,
     @JsonKey(name: 'Temperatura') required double tempAvg,
-    @JsonKey(name: 'Umiditate') required double humAvg,
-    @JsonKey(name: 'Data_timp') DateTime? timestamp,
-    @JsonKey(name: 'ECG') required List<double> ecgValues,
+    @JsonKey(name: 'Umiditate')  required double humAvg,
+    @JsonKey(name: 'Data_timp')  required DateTime timestamp,
+    @JsonKey(name: 'ECG')        required String ecgString,
   }) = _BurstData;
 
   factory BurstData.fromJson(Map<String, dynamic> json) =>

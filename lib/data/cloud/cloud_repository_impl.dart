@@ -20,40 +20,33 @@ class CloudRepositoryImpl implements CloudRepository {
   }
 
   @override
-  Future<void> sendBurstData(String patientId, BurstData burst) async {
-    // 1) Construim payload cu Puls/Temperatura/Umiditate
-    // 2) Pentru EKG, convertim lista de double la JSON-string
-    final String ecgJsonArray = jsonEncode(burst.ecgValues);
-
-    final Map<String, dynamic> payload = {
-      'Puls'       : burst.bpmAvg,
+  Future<void> sendBurstData(String userId, BurstData burst) async {
+    // Convertim totul într-un JSON conform așteptărilor backend-ului:
+    final payload = {
+      'userId':      int.parse(userId),
+      'Puls':       burst.bpmAvg,
       'Temperatura': burst.tempAvg,
-      'Umiditate'  : burst.humAvg,
-      'ECG'        : ecgJsonArray,
-      // NU trimitem Data_timp—backend‐ul va completa automat timestamp‐ul
+      'Umiditate':   burst.humAvg,
+      // ECG trebuie să fie String — serializăm lista de dubluri la JSON:
+      'ECG':         burst.ecgString,
+      // Data_timp trebuie să se cheme exact așa:
+      'Data_timp':   burst.timestamp.toIso8601String(),
     };
 
-    print('[CloudRepository] 🚀 Trimitem date fiziologice → '
-        'pacientID=$patientId, payload=$payload');
+    print('[CloudRepository] 🚀 Trimitem date fiziologice → userID=$userId, payload=$payload');
 
     try {
-      await _api.sendPhysioData(patientId, payload);
-      print('[CloudRepository] ✅ Trimis cu succes datele fiziologice.');
+      await _api.sendPhysioDataMobile(payload);
+      print('[CloudRepository] ✅ Server mobile a răspuns OK (2xx)');
     } catch (e) {
-      print('[CloudRepository] ❌ Eroare la trimiterea datelor fiziologice: $e');
+      print('[CloudRepository] ❌ Eroare la trimitere (mobile): $e');
       rethrow;
     }
   }
-
-
+  //RECOMANDARI
   @override
-  Future<List<Recommendation>> fetchRecommendations(String patientId) {
-    return _api.fetchRecommendations(patientId);
-  }
-
-  @override
-  Future<void> postRecommendation(Recommendation recommendation) {
-    return _api.postRecommendation(recommendation);
+  Future<List<Recommendation>> fetchRecommendations(String userId) {
+    return _api.fetchRecommendationsMobile(userId);
   }
 
   @override

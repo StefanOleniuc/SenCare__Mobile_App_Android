@@ -14,8 +14,7 @@ abstract class CloudRepository {
   Future<void> sendBurstData(String patientId, BurstData burst);
 
   // 3) RECOMANDĂRI
-  Future<List<Recommendation>> fetchRecommendations(String patientId);
-  Future<void> postRecommendation(Recommendation recommendation);
+  Future<List<Recommendation>> fetchRecommendations(String userId);
 
   // 4) ALARME
   Future<List<Alarm>> fetchAlarms(String patientId);

@@ -48,10 +48,7 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<void> sendPhysioData(
-    String patientId,
-    Map<String, dynamic> payload,
-  ) async {
+  Future<void> sendPhysioDataMobile(Map<String, dynamic> payload) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
@@ -64,7 +61,7 @@ class _ApiService implements ApiService {
     )
         .compose(
           _dio.options,
-          '/api/doctor/pacient/${patientId}/datefiziologice',
+          '/api/mobile/datefiziologice',
           queryParameters: queryParameters,
           data: _data,
         )
@@ -76,9 +73,9 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<List<Recommendation>> fetchRecommendations(String patientId) async {
+  Future<List<Recommendation>> fetchRecommendationsMobile(String userId) async {
     const _extra = <String, dynamic>{};
-    final queryParameters = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{r'userId': userId};
     final _headers = <String, dynamic>{};
     final Map<String, dynamic>? _data = null;
     final _result = await _dio
@@ -89,7 +86,7 @@ class _ApiService implements ApiService {
     )
             .compose(
               _dio.options,
-              '/api/recommendations/${patientId}',
+              '/api/mobile/recomandari',
               queryParameters: queryParameters,
               data: _data,
             )

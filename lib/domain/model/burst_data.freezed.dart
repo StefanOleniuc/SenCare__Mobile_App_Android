@@ -27,9 +27,9 @@ mixin _$BurstData {
   @JsonKey(name: 'Umiditate')
   double get humAvg => throw _privateConstructorUsedError;
   @JsonKey(name: 'Data_timp')
-  DateTime? get timestamp => throw _privateConstructorUsedError;
+  DateTime get timestamp => throw _privateConstructorUsedError;
   @JsonKey(name: 'ECG')
-  List<double> get ecgValues => throw _privateConstructorUsedError;
+  String get ecgString => throw _privateConstructorUsedError;
 
   /// Serializes this BurstData to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -50,8 +50,8 @@ abstract class $BurstDataCopyWith<$Res> {
       {@JsonKey(name: 'Puls') int bpmAvg,
       @JsonKey(name: 'Temperatura') double tempAvg,
       @JsonKey(name: 'Umiditate') double humAvg,
-      @JsonKey(name: 'Data_timp') DateTime? timestamp,
-      @JsonKey(name: 'ECG') List<double> ecgValues});
+      @JsonKey(name: 'Data_timp') DateTime timestamp,
+      @JsonKey(name: 'ECG') String ecgString});
 }
 
 /// @nodoc
@@ -72,8 +72,8 @@ class _$BurstDataCopyWithImpl<$Res, $Val extends BurstData>
     Object? bpmAvg = null,
     Object? tempAvg = null,
     Object? humAvg = null,
-    Object? timestamp = freezed,
-    Object? ecgValues = null,
+    Object? timestamp = null,
+    Object? ecgString = null,
   }) {
     return _then(_value.copyWith(
       bpmAvg: null == bpmAvg
@@ -88,14 +88,14 @@ class _$BurstDataCopyWithImpl<$Res, $Val extends BurstData>
           ? _value.humAvg
           : humAvg // ignore: cast_nullable_to_non_nullable
               as double,
-      timestamp: freezed == timestamp
+      timestamp: null == timestamp
           ? _value.timestamp
           : timestamp // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      ecgValues: null == ecgValues
-          ? _value.ecgValues
-          : ecgValues // ignore: cast_nullable_to_non_nullable
-              as List<double>,
+              as DateTime,
+      ecgString: null == ecgString
+          ? _value.ecgString
+          : ecgString // ignore: cast_nullable_to_non_nullable
+              as String,
     ) as $Val);
   }
 }
@@ -112,8 +112,8 @@ abstract class _$$BurstDataImplCopyWith<$Res>
       {@JsonKey(name: 'Puls') int bpmAvg,
       @JsonKey(name: 'Temperatura') double tempAvg,
       @JsonKey(name: 'Umiditate') double humAvg,
-      @JsonKey(name: 'Data_timp') DateTime? timestamp,
-      @JsonKey(name: 'ECG') List<double> ecgValues});
+      @JsonKey(name: 'Data_timp') DateTime timestamp,
+      @JsonKey(name: 'ECG') String ecgString});
 }
 
 /// @nodoc
@@ -132,8 +132,8 @@ class __$$BurstDataImplCopyWithImpl<$Res>
     Object? bpmAvg = null,
     Object? tempAvg = null,
     Object? humAvg = null,
-    Object? timestamp = freezed,
-    Object? ecgValues = null,
+    Object? timestamp = null,
+    Object? ecgString = null,
   }) {
     return _then(_$BurstDataImpl(
       bpmAvg: null == bpmAvg
@@ -148,14 +148,14 @@ class __$$BurstDataImplCopyWithImpl<$Res>
           ? _value.humAvg
           : humAvg // ignore: cast_nullable_to_non_nullable
               as double,
-      timestamp: freezed == timestamp
+      timestamp: null == timestamp
           ? _value.timestamp
           : timestamp // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      ecgValues: null == ecgValues
-          ? _value._ecgValues
-          : ecgValues // ignore: cast_nullable_to_non_nullable
-              as List<double>,
+              as DateTime,
+      ecgString: null == ecgString
+          ? _value.ecgString
+          : ecgString // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -167,9 +167,8 @@ class _$BurstDataImpl implements _BurstData {
       {@JsonKey(name: 'Puls') required this.bpmAvg,
       @JsonKey(name: 'Temperatura') required this.tempAvg,
       @JsonKey(name: 'Umiditate') required this.humAvg,
-      @JsonKey(name: 'Data_timp') this.timestamp,
-      @JsonKey(name: 'ECG') required final List<double> ecgValues})
-      : _ecgValues = ecgValues;
+      @JsonKey(name: 'Data_timp') required this.timestamp,
+      @JsonKey(name: 'ECG') required this.ecgString});
 
   factory _$BurstDataImpl.fromJson(Map<String, dynamic> json) =>
       _$$BurstDataImplFromJson(json);
@@ -185,19 +184,14 @@ class _$BurstDataImpl implements _BurstData {
   final double humAvg;
   @override
   @JsonKey(name: 'Data_timp')
-  final DateTime? timestamp;
-  final List<double> _ecgValues;
+  final DateTime timestamp;
   @override
   @JsonKey(name: 'ECG')
-  List<double> get ecgValues {
-    if (_ecgValues is EqualUnmodifiableListView) return _ecgValues;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableListView(_ecgValues);
-  }
+  final String ecgString;
 
   @override
   String toString() {
-    return 'BurstData(bpmAvg: $bpmAvg, tempAvg: $tempAvg, humAvg: $humAvg, timestamp: $timestamp, ecgValues: $ecgValues)';
+    return 'BurstData(bpmAvg: $bpmAvg, tempAvg: $tempAvg, humAvg: $humAvg, timestamp: $timestamp, ecgString: $ecgString)';
   }
 
   @override
@@ -210,14 +204,14 @@ class _$BurstDataImpl implements _BurstData {
             (identical(other.humAvg, humAvg) || other.humAvg == humAvg) &&
             (identical(other.timestamp, timestamp) ||
                 other.timestamp == timestamp) &&
-            const DeepCollectionEquality()
-                .equals(other._ecgValues, _ecgValues));
+            (identical(other.ecgString, ecgString) ||
+                other.ecgString == ecgString));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, bpmAvg, tempAvg, humAvg,
-      timestamp, const DeepCollectionEquality().hash(_ecgValues));
+  int get hashCode =>
+      Object.hash(runtimeType, bpmAvg, tempAvg, humAvg, timestamp, ecgString);
 
   /// Create a copy of BurstData
   /// with the given fields replaced by the non-null parameter values.
@@ -237,12 +231,11 @@ class _$BurstDataImpl implements _BurstData {
 
 abstract class _BurstData implements BurstData {
   factory _BurstData(
-          {@JsonKey(name: 'Puls') required final int bpmAvg,
-          @JsonKey(name: 'Temperatura') required final double tempAvg,
-          @JsonKey(name: 'Umiditate') required final double humAvg,
-          @JsonKey(name: 'Data_timp') final DateTime? timestamp,
-          @JsonKey(name: 'ECG') required final List<double> ecgValues}) =
-      _$BurstDataImpl;
+      {@JsonKey(name: 'Puls') required final int bpmAvg,
+      @JsonKey(name: 'Temperatura') required final double tempAvg,
+      @JsonKey(name: 'Umiditate') required final double humAvg,
+      @JsonKey(name: 'Data_timp') required final DateTime timestamp,
+      @JsonKey(name: 'ECG') required final String ecgString}) = _$BurstDataImpl;
 
   factory _BurstData.fromJson(Map<String, dynamic> json) =
       _$BurstDataImpl.fromJson;
@@ -258,10 +251,10 @@ abstract class _BurstData implements BurstData {
   double get humAvg;
   @override
   @JsonKey(name: 'Data_timp')
-  DateTime? get timestamp;
+  DateTime get timestamp;
   @override
   @JsonKey(name: 'ECG')
-  List<double> get ecgValues;
+  String get ecgString;
 
   /// Create a copy of BurstData
   /// with the given fields replaced by the non-null parameter values.

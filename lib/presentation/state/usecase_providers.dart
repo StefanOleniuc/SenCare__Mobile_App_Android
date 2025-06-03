@@ -23,15 +23,15 @@ final sendBatchUseCaseProvider = Provider<SendBatchUseCase>((ref) {
   // Obţinem AuthState (Authenticated sau Unauthenticated)
   final authState = ref.watch(authStateProvider);
   // Dacă e Authenticated, extragem userId; altfel string gol.
-  final patientId = authState.maybeWhen(
+  final userId = authState.maybeWhen(
     authenticated: (userId) => userId.toString(),
     orElse: () => '',
   );
 
-  print('[usecase_providers] Folosesc patientId="$patientId"');
+  print('[usecase_providers] Folosesc userId="$userId"');
   return SendBatchUseCase(
     sensorRepo,
     cloudRepo,
-    patientId: patientId,
+    userId: userId,
   );
 });

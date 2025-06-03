@@ -1,53 +1,53 @@
-// lib/application/send_batch_usecase.dart
-
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart'; // <-- pentru compute()
 import '../domain/model/ble_event.dart';
 import '../domain/model/burst_data.dart';
 import '../domain/repository/sensor_repository.dart';
 import '../domain/repository/cloud_repository.dart';
 
+/// Funcție pentru isolate: transformă lista de double în JSON
+String _encodeEcgList(List<double> ecgList) {
+  return jsonEncode(ecgList);
+}
+
 class SendBatchUseCase {
   final SensorRepository _sensorRepo;
-  final CloudRepository _cloudRepo;
-  final String patientId;
+  final CloudRepository  _cloudRepo;
+  final String           userId;
 
-  final List<SensorEvent> _slowBuffer = [];
-  final List<double> _ecgBuffer30s = [];
+  final List<SensorEvent> _slowBuffer  = [];
+  final List<double>      _ecgBuffer30s = [];
   Timer? _timer;
 
   SendBatchUseCase(
       this._sensorRepo,
       this._cloudRepo, {
-        required this.patientId,
-      }) {
-    print('[SendBatchUseCase] 🚀 Creat cu patientId="$patientId"');
-  }
+        required this.userId,
+      });
 
   void start() {
-    print('[SendBatchUseCase] ▶ start() apelat');
-    // Ascult BLE-ul:
     _sensorRepo.watchBleEvents().listen((bleEvent) {
       if (bleEvent is SensorEvent) {
-        print('[SendBatchUseCase] 🤖 SensorEvent primit: bpm=${bleEvent.bpm}, temp=${bleEvent.temp}, hum=${bleEvent.hum}');
         _slowBuffer.add(bleEvent);
       } else if (bleEvent is EkgEvent) {
-        print('[SendBatchUseCase] 🔄 EkgEvent primit: ekg=${bleEvent.ekg}');
+        // Adăugăm punctul ECG
         _ecgBuffer30s.add(bleEvent.ekg);
+        // Dacă sunt >200 puncte (ultimele ~10s), eliminăm primul
+        if (_ecgBuffer30s.length > 200) {
+          _ecgBuffer30s.removeAt(0);
+        }
       }
-    }, onError: (e) {
-      print('[SendBatchUseCase] ❌ Eroare în fluxul BLE: $e');
+    }, onError: (error) {
+      print('[SendBatchUseCase] ❌ Eroare BLE: $error');
     });
 
-    // Timer periodic (temporar, 5s pentru test – mai târziu schimbi în 30s):
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      print('[SendBatchUseCase] ⏰ Timer 5s s-a declanșat → apel _sendBufferedBatch()');
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       _sendBufferedBatch();
     });
   }
 
-  /// Apelează manual, on-demand (_sendBufferedBatch) fără să aștepți timer-ul.
   void sendNow() {
-    print('[SendBatchUseCase] ℹ sendNow() apelat → apel _sendBufferedBatch()');
     _sendBufferedBatch();
   }
 
@@ -56,65 +56,85 @@ class SendBatchUseCase {
   }
 
   void _sendBufferedBatch() {
-    print('[SendBatchUseCase] 📤 Încep _sendBufferedBatch()');
-
-    // 1) Verific dacă am patientId
-    if (patientId.isEmpty) {
-      print('[SendBatchUseCase] ❌ patientId este gol (""), nu trimit.');
-      return;
-    }
-
-    // 2) Verific dacă bufferele sunt goale
     if (_slowBuffer.isEmpty && _ecgBuffer30s.isEmpty) {
-      print('[SendBatchUseCase] ℹ Bufferele (sensor+ekg) sunt goale – nu trimit.');
+      print('[SendBatchUseCase] ℹ Buffere goale – nu trimit.');
       return;
     }
 
-    // 3) Dacă avem măcar un SensorEvent, calculez media
-    int bpmAvg;
-    double tempAvg, humAvg;
-
+    // 1) Media pentru valorile lente
+    int bpmAvg = 0;
+    double tempAvg = 0.0, humAvg = 0.0;
     if (_slowBuffer.isNotEmpty) {
       final int count = _slowBuffer.length;
-      final sumBpm = _slowBuffer.map((e) => e.bpm).reduce((a, b) => a + b);
-      final sumTemp = _slowBuffer.map((e) => e.temp).reduce((a, b) => a + b);
-      final sumHum  = _slowBuffer.map((e) => e.hum).reduce((a, b) => a + b);
+      final int sumBpm = _slowBuffer.map((e) => e.bpm).reduce((a, b) => a + b);
+      final double sumTemp =
+      _slowBuffer.map((e) => e.temp).reduce((a, b) => a + b);
+      final double sumHum =
+      _slowBuffer.map((e) => e.hum).reduce((a, b) => a + b);
 
       bpmAvg  = (sumBpm / count).round();
       tempAvg = sumTemp / count;
       humAvg  = sumHum / count;
-    } else {
-      bpmAvg  = 0;
-      tempAvg = 0.0;
-      humAvg  = 0.0;
     }
 
-    // 4) Preiau lista de EKG
-    final ecgList = List<double>.from(_ecgBuffer30s);
-
-    // 5) Construiesc BurstData
-    final burst = BurstData(
-      bpmAvg: bpmAvg,
-      tempAvg: tempAvg,
-      humAvg: humAvg,
-      timestamp: DateTime.now(),
-      ecgValues: ecgList,
-    );
-
-    print('[SendBatchUseCase] 📦 BurstData creat: $burst');
-    print('[SendBatchUseCase]    → număr SensorEvent în buffer: ${_slowBuffer.length}');
-    print('[SendBatchUseCase]    → număr EkgEvent în buffer: ${ecgList.length}');
-
-    // 6) Golesc bufferele
-    _slowBuffer.clear();
+    // 2) Copiem buffer-ul ECG într-un snapshot și golim
+    final List<double> ecgSnapshot = List<double>.from(_ecgBuffer30s);
     _ecgBuffer30s.clear();
 
-    // 7) Trimit către cloud
-    print('[SendBatchUseCase] 📬 Trimit burst la cloud: patientId="$patientId", payload=${burst.toJson()}');
-    _cloudRepo.sendBurstData(patientId, burst).then((_) {
-      print('[SendBatchUseCase] ✅ BurstData trimis cu succes la cloud.');
+    final DateTime now = DateTime.now();
+    final BurstData burstIntermediar = BurstData(
+      bpmAvg:    bpmAvg,
+      tempAvg:   tempAvg,
+      humAvg:    humAvg,
+      timestamp: now,
+      ecgString: '',
+    );
+
+    print('[SendBatchUseCase] 📦 BurstData (fără ECG): '
+        'bpmAvg=$bpmAvg, tempAvg=$tempAvg, humAvg=$humAvg, '
+        'ecgCount=${ecgSnapshot.length}');
+
+    // 3) Dacă nu avem ECG, trimitem direct cu ecgString="[]"
+    if (ecgSnapshot.isEmpty) {
+      final burstGol = burstIntermediar.copyWith(ecgString: '[]');
+      _uploadBurst(burstGol);
+      _slowBuffer.clear();
+      return;
+    }
+
+    // 4) Serializăm ecgSnapshot pe un isolate, apoi trimitem
+    compute<List<double>, String>(
+      _encodeEcgList,
+      ecgSnapshot,
+    ).then((encodedEcg) {
+      final BurstData burstComplet =
+      burstIntermediar.copyWith(ecgString: encodedEcg);
+      _uploadBurst(burstComplet);
+    }).catchError((err) {
+      print('[SendBatchUseCase] ❌ Eroare la jsonEncode(ecg): $err');
+    });
+
+    _slowBuffer.clear();
+  }
+
+  void _uploadBurst(BurstData burst) {
+    final payload = {
+      'userId':      int.parse(userId),
+      'Puls':        burst.bpmAvg,
+      'Temperatura': burst.tempAvg,
+      'Umiditate':   burst.humAvg,
+      'ECG':         burst.ecgString,
+      'Data_timp':   burst.timestamp.toIso8601String(),
+    };
+
+    print('[SendBatchUseCase] 📬 Upload → userId=$userId, '
+        'Puls=${burst.bpmAvg}, Temperatura=${burst.tempAvg}, '
+        'Umiditate=${burst.humAvg}, ECG-lungime=${burst.ecgString.length}');
+
+    _cloudRepo.sendBurstData(userId, burst).then((_) {
+      print('[SendBatchUseCase] ✅ Upload OK');
     }).catchError((e) {
-      print('[SendBatchUseCase] ❌ Eroare la upload către cloud: $e');
+      print('[SendBatchUseCase] ❌ Eroare la upload: $e');
     });
   }
 }

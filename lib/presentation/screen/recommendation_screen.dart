@@ -1,27 +1,36 @@
-// lib/presentation/screen/recommendation_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../domain/model/recommendation.dart';
 import '../state/recommendation_provider.dart';
+import '../state/auth_provider.dart';
+import '../../domain/model/recommendation.dart';
 
 class RecommendationScreen extends ConsumerWidget {
-  final String patientId;
-
-  const RecommendationScreen({
-    Key? key,
-    required this.patientId,
-  }) : super(key: key);
+  final String userId;
+  const RecommendationScreen({Key? key, required this.userId}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recsAsync = ref.watch(recommendationProvider(patientId));
+    final authState = ref.watch(authStateProvider);
+    final userId = authState.maybeWhen(
+      authenticated: (userId) => userId,
+      orElse: () => null,
+    );
+
+    if (userId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Nu sunteți autentificat.')),
+      );
+    }
+
+    final recsAsync = ref.watch(recommendationProvider(userId.toString()));
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue.shade700,
         title: const Text('Recomandări'),
+        elevation: 0,
       ),
+      backgroundColor: Colors.blue.shade50,
       body: recsAsync.when(
         data: (recs) {
           if (recs.isEmpty) {
@@ -33,7 +42,7 @@ class RecommendationScreen extends ConsumerWidget {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
             itemCount: recs.length,
             itemBuilder: (context, index) {
               final r = recs[index];
@@ -54,7 +63,6 @@ class RecommendationScreen extends ConsumerWidget {
   }
 }
 
-/// Un card stilizat care afișează datele unei recomandări
 class RecommendationCard extends StatelessWidget {
   final Recommendation rec;
 
@@ -62,57 +70,63 @@ class RecommendationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dacă aveți nevoie să afișați un format de dată, îl puteți converti aici:
-    // (Presupunând că rec.createdAt e de tip DateTime. Dacă nu, omiteți)
-    // final dateText = DateFormat('yyyy-MM-dd – kk:mm').format(rec.createdAt);
-
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+      elevation: 8,
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shadowColor: Colors.blue.shade200,
+      color: Colors.white,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade50, Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ----- Titlu recomandare -----
             Text(
               rec.TipRecomandare,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.blue.shade800,
               ),
             ),
-
-            const SizedBox(height: 6),
-
-            // ----- Durată zilnică -----
-            Text(
-              'Durata zilnică: ${rec.DurataZilnica}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.timer, color: Colors.blue.shade400, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  'Durata zilnică: ${rec.DurataZilnica ?? "N/A"}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.blueGrey.shade700,
+                  ),
+                ),
+              ],
             ),
-
-            const SizedBox(height: 6),
-
-            // ----- Alte indicații -----
-            Text(
-              'Alte indicații: ${rec.AlteIndicatii}',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade400, size: 20),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Alte indicații: ${rec.AlteIndicatii ?? "N/A"}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.blueGrey.shade700,
+                    ),
+                  ),
+                ),
+              ],
             ),
-
-            // Dacă aveți câmp createdAt (DateTime), puteți afișa data la final:
-            // const SizedBox(height: 8),
-            // Text(
-            //   'Creată la: $dateText',
-            //   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            // ),
           ],
         ),
       ),

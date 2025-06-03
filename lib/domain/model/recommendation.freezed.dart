@@ -22,10 +22,9 @@ Recommendation _$RecommendationFromJson(Map<String, dynamic> json) {
 mixin _$Recommendation {
   int get RecomandareID => throw _privateConstructorUsedError;
   int get PacientID => throw _privateConstructorUsedError;
-  int get MedicID => throw _privateConstructorUsedError;
   String get TipRecomandare => throw _privateConstructorUsedError;
-  String get DurataZilnica => throw _privateConstructorUsedError;
-  String get AlteIndicatii => throw _privateConstructorUsedError;
+  String? get DurataZilnica => throw _privateConstructorUsedError;
+  String? get AlteIndicatii => throw _privateConstructorUsedError;
 
   /// Serializes this Recommendation to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -46,10 +45,9 @@ abstract class $RecommendationCopyWith<$Res> {
   $Res call(
       {int RecomandareID,
       int PacientID,
-      int MedicID,
       String TipRecomandare,
-      String DurataZilnica,
-      String AlteIndicatii});
+      String? DurataZilnica,
+      String? AlteIndicatii});
 }
 
 /// @nodoc
@@ -69,10 +67,9 @@ class _$RecommendationCopyWithImpl<$Res, $Val extends Recommendation>
   $Res call({
     Object? RecomandareID = null,
     Object? PacientID = null,
-    Object? MedicID = null,
     Object? TipRecomandare = null,
-    Object? DurataZilnica = null,
-    Object? AlteIndicatii = null,
+    Object? DurataZilnica = freezed,
+    Object? AlteIndicatii = freezed,
   }) {
     return _then(_value.copyWith(
       RecomandareID: null == RecomandareID
@@ -83,22 +80,18 @@ class _$RecommendationCopyWithImpl<$Res, $Val extends Recommendation>
           ? _value.PacientID
           : PacientID // ignore: cast_nullable_to_non_nullable
               as int,
-      MedicID: null == MedicID
-          ? _value.MedicID
-          : MedicID // ignore: cast_nullable_to_non_nullable
-              as int,
       TipRecomandare: null == TipRecomandare
           ? _value.TipRecomandare
           : TipRecomandare // ignore: cast_nullable_to_non_nullable
               as String,
-      DurataZilnica: null == DurataZilnica
+      DurataZilnica: freezed == DurataZilnica
           ? _value.DurataZilnica
           : DurataZilnica // ignore: cast_nullable_to_non_nullable
-              as String,
-      AlteIndicatii: null == AlteIndicatii
+              as String?,
+      AlteIndicatii: freezed == AlteIndicatii
           ? _value.AlteIndicatii
           : AlteIndicatii // ignore: cast_nullable_to_non_nullable
-              as String,
+              as String?,
     ) as $Val);
   }
 }
@@ -114,10 +107,9 @@ abstract class _$$RecommendationImplCopyWith<$Res>
   $Res call(
       {int RecomandareID,
       int PacientID,
-      int MedicID,
       String TipRecomandare,
-      String DurataZilnica,
-      String AlteIndicatii});
+      String? DurataZilnica,
+      String? AlteIndicatii});
 }
 
 /// @nodoc
@@ -135,10 +127,9 @@ class __$$RecommendationImplCopyWithImpl<$Res>
   $Res call({
     Object? RecomandareID = null,
     Object? PacientID = null,
-    Object? MedicID = null,
     Object? TipRecomandare = null,
-    Object? DurataZilnica = null,
-    Object? AlteIndicatii = null,
+    Object? DurataZilnica = freezed,
+    Object? AlteIndicatii = freezed,
   }) {
     return _then(_$RecommendationImpl(
       RecomandareID: null == RecomandareID
@@ -149,22 +140,18 @@ class __$$RecommendationImplCopyWithImpl<$Res>
           ? _value.PacientID
           : PacientID // ignore: cast_nullable_to_non_nullable
               as int,
-      MedicID: null == MedicID
-          ? _value.MedicID
-          : MedicID // ignore: cast_nullable_to_non_nullable
-              as int,
       TipRecomandare: null == TipRecomandare
           ? _value.TipRecomandare
           : TipRecomandare // ignore: cast_nullable_to_non_nullable
               as String,
-      DurataZilnica: null == DurataZilnica
+      DurataZilnica: freezed == DurataZilnica
           ? _value.DurataZilnica
           : DurataZilnica // ignore: cast_nullable_to_non_nullable
-              as String,
-      AlteIndicatii: null == AlteIndicatii
+              as String?,
+      AlteIndicatii: freezed == AlteIndicatii
           ? _value.AlteIndicatii
           : AlteIndicatii // ignore: cast_nullable_to_non_nullable
-              as String,
+              as String?,
     ));
   }
 }
@@ -175,10 +162,9 @@ class _$RecommendationImpl implements _Recommendation {
   const _$RecommendationImpl(
       {required this.RecomandareID,
       required this.PacientID,
-      required this.MedicID,
       required this.TipRecomandare,
-      required this.DurataZilnica,
-      required this.AlteIndicatii});
+      this.DurataZilnica,
+      this.AlteIndicatii});
 
   factory _$RecommendationImpl.fromJson(Map<String, dynamic> json) =>
       _$$RecommendationImplFromJson(json);
@@ -188,17 +174,15 @@ class _$RecommendationImpl implements _Recommendation {
   @override
   final int PacientID;
   @override
-  final int MedicID;
-  @override
   final String TipRecomandare;
   @override
-  final String DurataZilnica;
+  final String? DurataZilnica;
   @override
-  final String AlteIndicatii;
+  final String? AlteIndicatii;
 
   @override
   String toString() {
-    return 'Recommendation(RecomandareID: $RecomandareID, PacientID: $PacientID, MedicID: $MedicID, TipRecomandare: $TipRecomandare, DurataZilnica: $DurataZilnica, AlteIndicatii: $AlteIndicatii)';
+    return 'Recommendation(RecomandareID: $RecomandareID, PacientID: $PacientID, TipRecomandare: $TipRecomandare, DurataZilnica: $DurataZilnica, AlteIndicatii: $AlteIndicatii)';
   }
 
   @override
@@ -210,7 +194,6 @@ class _$RecommendationImpl implements _Recommendation {
                 other.RecomandareID == RecomandareID) &&
             (identical(other.PacientID, PacientID) ||
                 other.PacientID == PacientID) &&
-            (identical(other.MedicID, MedicID) || other.MedicID == MedicID) &&
             (identical(other.TipRecomandare, TipRecomandare) ||
                 other.TipRecomandare == TipRecomandare) &&
             (identical(other.DurataZilnica, DurataZilnica) ||
@@ -222,7 +205,7 @@ class _$RecommendationImpl implements _Recommendation {
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, RecomandareID, PacientID,
-      MedicID, TipRecomandare, DurataZilnica, AlteIndicatii);
+      TipRecomandare, DurataZilnica, AlteIndicatii);
 
   /// Create a copy of Recommendation
   /// with the given fields replaced by the non-null parameter values.
@@ -245,10 +228,9 @@ abstract class _Recommendation implements Recommendation {
   const factory _Recommendation(
       {required final int RecomandareID,
       required final int PacientID,
-      required final int MedicID,
       required final String TipRecomandare,
-      required final String DurataZilnica,
-      required final String AlteIndicatii}) = _$RecommendationImpl;
+      final String? DurataZilnica,
+      final String? AlteIndicatii}) = _$RecommendationImpl;
 
   factory _Recommendation.fromJson(Map<String, dynamic> json) =
       _$RecommendationImpl.fromJson;
@@ -258,13 +240,11 @@ abstract class _Recommendation implements Recommendation {
   @override
   int get PacientID;
   @override
-  int get MedicID;
-  @override
   String get TipRecomandare;
   @override
-  String get DurataZilnica;
+  String? get DurataZilnica;
   @override
-  String get AlteIndicatii;
+  String? get AlteIndicatii;
 
   /// Create a copy of Recommendation
   /// with the given fields replaced by the non-null parameter values.

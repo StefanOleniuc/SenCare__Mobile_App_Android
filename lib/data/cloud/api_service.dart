@@ -8,7 +8,6 @@ import '../../domain/model/login_request.dart';
 import '../../domain/model/burst_data.dart';
 import '../../domain/model/recommendation.dart';
 import '../../domain/model/alarm.dart';
-
 part 'api_service.g.dart';
 
 @RestApi(baseUrl: 'https://sencareapp-backend.azurewebsites.net')
@@ -19,17 +18,14 @@ abstract class ApiService {
   @POST('/api/login')
   Future<AuthToken> login(@Body() LoginRequest credentials);
 
-  // --- 2) TRIMITERE BURSTDATA ---
-  @POST('/api/doctor/pacient/{id}/datefiziologice')
-  Future<void> sendPhysioData(
-      @Path('id') String patientId,
-      @Body() Map<String, dynamic> payload,
-      );
+  // ### NOUL ENDPOINT PENTRU MOBILE
+  @POST('/api/mobile/datefiziologice')
+  Future<void> sendPhysioDataMobile(@Body() Map<String, dynamic> payload);
 
   // 4) RECOMANDĂRI
-  @GET('/api/recommendations/{patientId}')
-  Future<List<Recommendation>> fetchRecommendations(
-      @Path('patientId') String patientId,
+  @GET('/api/mobile/recomandari')
+  Future<List<Recommendation>> fetchRecommendationsMobile(
+      @Query('userId') String userId,
       );
 
   @POST('/api/recommendations')

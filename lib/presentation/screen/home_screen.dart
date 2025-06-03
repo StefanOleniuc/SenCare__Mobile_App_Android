@@ -13,6 +13,9 @@ import 'recommendation_screen.dart';
 import 'activities_screen.dart';
 import 'alerts_screen.dart';
 import '../../domain/model/ble_event.dart';
+import '../../domain/model/burst_data.dart';
+import '../../presentation/state/cloud_providers.dart';
+import 'dart:convert';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -314,7 +317,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.of(context).pop();
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => RecommendationScreen(patientId: userId),
+                  builder: (_) => RecommendationScreen(userId: userId),
                 ),
               );
             },

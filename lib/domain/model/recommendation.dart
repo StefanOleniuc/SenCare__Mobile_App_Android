@@ -8,10 +8,9 @@ class Recommendation with _$Recommendation {
   const factory Recommendation({
     required int RecomandareID,
     required int PacientID,
-    required int MedicID,
     required String TipRecomandare,
-    required String DurataZilnica,
-    required String AlteIndicatii,
+    String? DurataZilnica,
+    String? AlteIndicatii,
   }) = _Recommendation;
 
   factory Recommendation.fromJson(Map<String, dynamic> json) =>

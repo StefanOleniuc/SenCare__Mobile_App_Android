@@ -6,6 +6,6 @@ import '../../domain/repository/cloud_repository.dart';
 import 'cloud_providers.dart';
 
 final recommendationProvider =
-FutureProvider.autoDispose.family<List<Recommendation>, String>((ref, patientId) {
-  return ref.read(cloudRepositoryProvider).fetchRecommendations(patientId);
+FutureProvider.autoDispose.family<List<Recommendation>, String>((ref, userId) {
+  return ref.read(cloudRepositoryProvider).fetchRecommendations(userId);
 });
