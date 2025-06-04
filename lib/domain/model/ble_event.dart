@@ -18,14 +18,5 @@ class BleEvent with _$BleEvent {
     required double ekg,
   }) = EkgEvent;
 
-  /// (Nu ne vom mai folosi de BurstEvent, pentru că acum facem noi agregarea)
-  // const factory BleEvent.burst({ required int bpmAvg, required double tempAvg, required double humAvg, }) = BurstEvent;
-
-  /// Alerta asincronă (se va face în pasul 2, dacă vei face alerte)
-  /*const factory BleEvent.alert({
-    required bool alert,
-    required Map<String, bool> alertSources,
-  }) = AlertEvent;*/
-
   factory BleEvent.fromJson(Map<String, dynamic> json) => _$BleEventFromJson(json);
 }

@@ -4,7 +4,8 @@ import '../model/auth_token.dart';
 import '../model/login_request.dart';
 import '../model/burst_data.dart';
 import '../model/recommendation.dart';
-import '../model/alarm.dart';
+import '../model/alarm_model.dart';
+import '../model/normal_values.dart';
 
 abstract class CloudRepository {
   // 1) LOGIN
@@ -17,6 +18,9 @@ abstract class CloudRepository {
   Future<List<Recommendation>> fetchRecommendations(String userId);
 
   // 4) ALARME
-  Future<List<Alarm>> fetchAlarms(String patientId);
-  Future<void> postAlarm(Alarm alarm);
+  Future<List<AlarmModel>> fetchAlarms(String patientId);
+  Future<void> postAlarm(AlarmModel alarm);
+
+  // 5) NORMAL VALUES
+  Future<NormalValues> fetchNormalValues(String userId);
 }

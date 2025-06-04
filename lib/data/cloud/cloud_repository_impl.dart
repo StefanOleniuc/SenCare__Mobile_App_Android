@@ -4,8 +4,9 @@ import '../../domain/model/auth_token.dart';
 import '../../domain/model/login_request.dart';
 import '../../domain/model/burst_data.dart';
 import '../../domain/model/recommendation.dart';
-import '../../domain/model/alarm.dart';
+import '../../domain/model/alarm_model.dart';
 import '../../domain/repository/cloud_repository.dart';
+import '../../domain/model/normal_values.dart';
 import 'api_service.dart';
 import 'dart:convert';
 
@@ -50,12 +51,17 @@ class CloudRepositoryImpl implements CloudRepository {
   }
 
   @override
-  Future<List<Alarm>> fetchAlarms(String patientId) {
+  Future<List<AlarmModel>> fetchAlarms(String patientId) {
     return _api.fetchAlarms(patientId);
   }
 
   @override
-  Future<void> postAlarm(Alarm alarm) {
+  Future<void> postAlarm(AlarmModel alarm) {
     return _api.postAlarm(alarm);
+  }
+
+  @override
+  Future<NormalValues> fetchNormalValues(String userId) {
+    return _api.fetchNormalValuesMobile(userId);
   }
 }

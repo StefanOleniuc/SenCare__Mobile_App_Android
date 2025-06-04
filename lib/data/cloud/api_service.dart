@@ -7,7 +7,8 @@ import '../../domain/model/auth_token.dart';
 import '../../domain/model/login_request.dart';
 import '../../domain/model/burst_data.dart';
 import '../../domain/model/recommendation.dart';
-import '../../domain/model/alarm.dart';
+import '../../domain/model/alarm_model.dart';
+import '../../domain/model/normal_values.dart';
 part 'api_service.g.dart';
 
 @RestApi(baseUrl: 'https://sencareapp-backend.azurewebsites.net')
@@ -33,8 +34,12 @@ abstract class ApiService {
 
   // 5) ALARME
   @GET('/api/alarms/{patientId}')
-  Future<List<Alarm>> fetchAlarms(@Path('patientId') String patientId);
+  Future<List<AlarmModel>> fetchAlarms(@Path('patientId') String patientId);
 
   @POST('/api/alarms')
-  Future<void> postAlarm(@Body() Alarm alarm);
+  Future<void> postAlarm(@Body() AlarmModel alarm);
+
+  // 6) NORMAL VALUES
+  @GET('/api/mobile/valorinormale')
+  Future<NormalValues> fetchNormalValuesMobile(@Query('userId') String userId);
 }

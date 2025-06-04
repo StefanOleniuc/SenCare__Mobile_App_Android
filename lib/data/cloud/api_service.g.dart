@@ -126,13 +126,13 @@ class _ApiService implements ApiService {
   }
 
   @override
-  Future<List<Alarm>> fetchAlarms(String patientId) async {
+  Future<List<AlarmModel>> fetchAlarms(String patientId) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
     final Map<String, dynamic>? _data = null;
-    final _result =
-        await _dio.fetch<List<dynamic>>(_setStreamType<List<Alarm>>(Options(
+    final _result = await _dio
+        .fetch<List<dynamic>>(_setStreamType<List<AlarmModel>>(Options(
       method: 'GET',
       headers: _headers,
       extra: _extra,
@@ -149,13 +149,13 @@ class _ApiService implements ApiService {
               baseUrl,
             ))));
     var value = _result.data!
-        .map((dynamic i) => Alarm.fromJson(i as Map<String, dynamic>))
+        .map((dynamic i) => AlarmModel.fromJson(i as Map<String, dynamic>))
         .toList();
     return value;
   }
 
   @override
-  Future<void> postAlarm(Alarm alarm) async {
+  Future<void> postAlarm(AlarmModel alarm) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
@@ -176,6 +176,33 @@ class _ApiService implements ApiService {
           _dio.options.baseUrl,
           baseUrl,
         ))));
+  }
+
+  @override
+  Future<NormalValues> fetchNormalValuesMobile(String userId) async {
+    const _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{r'userId': userId};
+    final _headers = <String, dynamic>{};
+    final Map<String, dynamic>? _data = null;
+    final _result = await _dio
+        .fetch<Map<String, dynamic>>(_setStreamType<NormalValues>(Options(
+      method: 'GET',
+      headers: _headers,
+      extra: _extra,
+    )
+            .compose(
+              _dio.options,
+              '/api/mobile/valorinormale',
+              queryParameters: queryParameters,
+              data: _data,
+            )
+            .copyWith(
+                baseUrl: _combineBaseUrls(
+              _dio.options.baseUrl,
+              baseUrl,
+            ))));
+    final value = NormalValues.fromJson(_result.data!);
+    return value;
   }
 
   RequestOptions _setStreamType<T>(RequestOptions requestOptions) {
