@@ -1,3 +1,5 @@
+//lib/application/send_batch_usecase.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart'; // <-- pentru compute()

@@ -1,3 +1,5 @@
+//path: lib/domain/model/recommendation.dart
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'recommendation.freezed.dart';

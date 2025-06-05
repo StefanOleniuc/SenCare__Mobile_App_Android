@@ -5,14 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:permission_handler/permission_handler.dart';
-
 import '../../data/accelerometer/accelerometer_service.dart';
 import '../state/ble_providers.dart';
 import '../state/usecase_providers.dart';
 import '../state/auth_provider.dart';
 import '../state/normal_values_provider.dart';
 import '../state/alarm_provider.dart';
-import '../state/send_alarm_usecase_provider.dart'; // <--- NOU!
+import '../state/send_alarm_usecase_provider.dart';
 import '../../domain/model/ble_event.dart';
 import '../../domain/model/normal_values.dart';
 import '../../domain/model/alarm_model.dart';
@@ -38,6 +37,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<SensorEvent> _last10sEvents = [];
   bool _isRunning = false;
   bool _alarmShowing = false;
+
+  // Buffer pentru accelerometru (30s), doar pentru corelare locală
+  final List<Map<String, double>> _accelBuffer = [];
+
   NormalValues? _normalValues;
   List<AlarmModel> _alarme = [];
 
@@ -46,6 +49,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _accelService = AccelerometerService();
     _accelService.start((event) {
+      // Buffer local de 30s pentru corelare (nu trimitem pe cloud)
+      _accelBuffer.add({'x': event.x, 'y': event.y, 'z': event.z});
+      if (_accelBuffer.length > 30) _accelBuffer.removeAt(0);
+
+      // Detecție alergare/mișcare
       final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       _isRunning = magnitude > 8.0;
     });
@@ -53,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initBleAndBatch();
 
+      // 🟠 Ia userId și preia valorile normale + alarme din cloud
       final authState = ref.read(authStateProvider);
       final userId = authState.maybeWhen(
         authenticated: (id) => id.toString(),
@@ -60,19 +69,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
 
       if (userId.isNotEmpty) {
+        print('🟠 [HomeScreen] Cer valori normale din cloud...');
         try {
           final normal = await ref.read(normalValuesProvider(userId).future);
           _normalValues = normal;
-        } catch (_) {}
+          print('🟢 [HomeScreen] Valori normale încărcate: $_normalValues');
+        } catch (e) {
+          print('🔴 [HomeScreen] EROARE valori normale: $e');
+        }
+        print('🟠 [HomeScreen] Cer alarme din cloud...');
         try {
           final alarme = await ref.read(alarmsProvider(userId).future);
           _alarme = alarme;
-        } catch (_) {}
+          print('🟢 [HomeScreen] Alarme încărcate: $_alarme');
+        } catch (e) {
+          print('🔴 [HomeScreen] EROARE alarme: $e');
+        }
         setState(() {});
       }
 
       _alarmTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkAlarms());
-      // Batch la 30s orchestrat din provider/usecase
       ref.read(sendBatchUseCaseProvider).start();
     });
   }
@@ -521,9 +537,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// --- VERIFICARE ALARME/AVERTIZĂRI LA 10s ---
   void _checkAlarms() async {
     if (_alarmShowing) return;
-    if (_normalValues == null) return;
+    if (_normalValues == null) {
+      print('🔴 [HomeScreen] Lipsesc valorile normale, nu pot verifica alarme.');
+      return;
+    }
     if (_last10sEvents.isEmpty) return;
 
     final last = _last10sEvents.last;
@@ -536,37 +556,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final int pulsMax = _normalValues!.pulsMax;
     final int pulsMaxInMiscar = pulsMax + 20;
 
+    // --- PULS ---
     if (_isRunning) {
       if (last.bpm > pulsMaxInMiscar) {
-        _alarmShowing = true;
+        print('🚨 [HomeScreen] Puls ridicat în mișcare: ${last.bpm} > $pulsMaxInMiscar');
         await _showAlarmDialog(
           'Alarmă Puls',
-          'Pulsul e mult prea ridicat chiar și în mișcare!',
+          _getAlarmDescriere('Alarma Puls'),
           'Alarma Puls',
           last,
         );
         _last10sEvents.clear();
         return;
-      } else {
-        _last10sEvents.clear();
-        return;
       }
     } else {
       if (last.bpm < pulsMin || last.bpm > pulsMax) {
-        _alarmShowing = true;
+        print('🚨 [HomeScreen] Puls în afara limitelor: ${last.bpm} ($pulsMin-$pulsMax)');
         await _showAlarmDialog(
           'Alarmă Puls',
-          'Pulsul este în afara limitelor!',
+          _getAlarmDescriere('Alarma Puls'),
           'Alarma Puls',
           last,
         );
         _last10sEvents.clear();
         return;
       } else if ((last.bpm - pulsMin).abs() <= 5 || (last.bpm - pulsMax).abs() <= 5) {
-        _alarmShowing = true;
+        print('⚠️ [HomeScreen] Puls aproape de limită.');
         await _showAlarmDialog(
           'Avertizare Puls',
-          'Pulsul este aproape de limită.',
+          _getAlarmDescriere('Avertizare Puls'),
           'Avertizare Puls',
           last,
         );
@@ -575,23 +593,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
 
+    // --- TEMPERATURĂ ---
     final double tempMin = _normalValues!.temperaturaMin;
     final double tempMax = _normalValues!.temperaturaMax;
     if (last.temp < tempMin || last.temp > tempMax) {
-      _alarmShowing = true;
+      print('🚨 [HomeScreen] Temperatura în afara limitelor: ${last.temp} ($tempMin-$tempMax)');
       await _showAlarmDialog(
         'Alarmă Temperatura',
-        'Temperatura este în afara limitelor!',
+        _getAlarmDescriere('Alarma Temperatura'),
         'Alarma Temperatura',
         last,
       );
       _last10sEvents.clear();
       return;
     } else if ((last.temp - tempMin).abs() <= 0.5 || (last.temp - tempMax).abs() <= 0.5) {
-      _alarmShowing = true;
+      print('⚠️ [HomeScreen] Temperatura aproape de limită.');
       await _showAlarmDialog(
         'Avertizare Temperatura',
-        'Temperatura este aproape de limită.',
+        _getAlarmDescriere('Avertizare Temperatura'),
         'Avertizare Temperatura',
         last,
       );
@@ -599,23 +618,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
+    // --- UMIDITATE ---
     final double humMin = _normalValues!.umiditateMin;
     final double humMax = _normalValues!.umiditateMax;
     if (last.hum < humMin || last.hum > humMax) {
-      _alarmShowing = true;
+      print('🚨 [HomeScreen] Umiditate în afara limitelor: ${last.hum} ($humMin-$humMax)');
       await _showAlarmDialog(
         'Alarmă Umiditate',
-        'Umiditatea este în afara limitelor!',
+        _getAlarmDescriere('Alarma Umiditate'),
         'Alarma Umiditate',
         last,
       );
       _last10sEvents.clear();
       return;
     } else if ((last.hum - humMin).abs() <= 2 || (last.hum - humMax).abs() <= 2) {
-      _alarmShowing = true;
+      print('⚠️ [HomeScreen] Umiditate aproape de limită.');
       await _showAlarmDialog(
         'Avertizare Umiditate',
-        'Umiditatea este aproape de limită.',
+        _getAlarmDescriere('Avertizare Umiditate'),
         'Avertizare Umiditate',
         last,
       );
@@ -626,9 +646,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _last10sEvents.clear();
   }
 
+  String _getAlarmDescriere(String tip) {
+    final found = _alarme.firstWhere(
+          (a) => a.tipAlarma == tip,
+      orElse: () => AlarmModel(alarmaId: -1, pacientId: -1, tipAlarma: tip, descriere: ''),
+    );
+    return found.descriere;
+  }
+
   Future<void> _showAlarmDialog(
       String title,
-      String content,
+      String descriere,
       String tip,
       SensorEvent? event,
       ) async {
@@ -643,7 +671,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(content),
+            Text(descriere),
             const SizedBox(height: 12),
             TextField(
               decoration: const InputDecoration(
@@ -669,7 +697,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// FOARTE IMPORTANT: doar apelează usecase-ul, nu implementa logică API aici!
+  /// Trimitere instant la cloud la alarmă/avertizare!
   Future<void> _sendAlarmToCloud(
       String tip,
       SensorEvent? event,
@@ -680,19 +708,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (event == null) return;
 
-    // 1. Găsește modelul de alarmă după tip
     AlarmModel? foundModel;
     try {
       foundModel = _alarme.firstWhere((a) => a.tipAlarma == tip);
     } catch (_) {
-      return;
+      foundModel = AlarmModel(
+        alarmaId: -1,
+        pacientId: -1,
+        tipAlarma: tip,
+        descriere: '',
+      );
     }
 
-    // 2. Apelează usecase-ul de trimitere alarmă (care se ocupă de tot)
+    print('🚀 [HomeScreen] TRIMIT ALARMĂ INSTANT: tip=$tip, event=$event, userMsg="$userMessage"');
+
+    // Trimit datele exacte, nu media!
     await ref.read(sendAlarmUseCaseProvider).call(
       userId: userId,
       event: event,
-      ecg: _ecgBuffer.map((f) => f.y).toList(),
+      ecg: _ecgBuffer.length > 200
+          ? _ecgBuffer.sublist(_ecgBuffer.length - 200).map((f) => f.y).toList()
+          : _ecgBuffer.map((f) => f.y).toList(),
       alarm: foundModel,
       tipAlarma: tip,
       userMessage: userMessage,

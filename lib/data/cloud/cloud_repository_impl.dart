@@ -51,17 +51,8 @@ class CloudRepositoryImpl implements CloudRepository {
   }
 
   @override
-  Future<List<AlarmModel>> fetchAlarms(String patientId) {
-    return _api.fetchAlarms(patientId);
-  }
-
-  @override
-  Future<void> postAlarm(AlarmModel alarm) {
-    return _api.postAlarm(alarm);
-  }
-
-  @override
   Future<NormalValues> fetchNormalValues(String userId) {
+    print('🟢 [CloudRepositoryImpl] fetchNormalValues for user: $userId');
     return _api.fetchNormalValuesMobile(userId);
   }
 
@@ -81,6 +72,13 @@ class CloudRepositoryImpl implements CloudRepository {
       "descriere": descriere,
       "actiune": actiune,
     };
-    await _api.sendAlarmHistoryMobile(payload);
+    print('🟠 [CloudRepositoryImpl] sendAlarmHistory payload: $payload');
+    try {
+      await _api.sendAlarmHistoryMobile(payload);
+      print('✅ [CloudRepositoryImpl] sendAlarmHistory OK');
+    } catch (e) {
+      print('🛑 [CloudRepositoryImpl] sendAlarmHistory ERROR: $e');
+      rethrow;
+    }
   }
 }

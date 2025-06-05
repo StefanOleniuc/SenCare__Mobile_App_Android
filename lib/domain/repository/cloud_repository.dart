@@ -17,10 +17,6 @@ abstract class CloudRepository {
   // 3) RECOMANDĂRI
   Future<List<Recommendation>> fetchRecommendations(String userId);
 
-  // 4) ALARME
-  Future<List<AlarmModel>> fetchAlarms(String patientId);
-  Future<void> postAlarm(AlarmModel alarm);
-
   // 5) NORMAL VALUES
   Future<NormalValues> fetchNormalValues(String userId);
 
