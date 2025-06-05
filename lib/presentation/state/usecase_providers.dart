@@ -15,23 +15,22 @@ final sensorRepoProvider = Provider<SensorRepository>((ref) {
   return SensorRepositoryImpl(ref.read(bleServiceProvider));
 });
 
-/// 2) SendBatchUseCase Provider, cu patientId luat din AuthState
+/// 2) SendBatchUseCase Provider: îl construim cu `userId` luat din AuthState.
 final sendBatchUseCaseProvider = Provider<SendBatchUseCase>((ref) {
   final sensorRepo = ref.read(sensorRepoProvider);
   final cloudRepo  = ref.read(cloudRepositoryProvider);
 
-  // Obţinem AuthState (Authenticated sau Unauthenticated)
+  // Obținem AuthState (Authenticated sau Unauthenticated).
   final authState = ref.watch(authStateProvider);
-  // Dacă e Authenticated, extragem userId; altfel string gol.
   final userId = authState.maybeWhen(
-    authenticated: (userId) => userId.toString(),
+    authenticated: (id) => id.toString(),
     orElse: () => '',
   );
 
-  print('[usecase_providers] Folosesc userId="$userId"');
+  print('[usecase_providers] Folosesc userId="$userId" la creația SendBatchUseCase');
   return SendBatchUseCase(
     sensorRepo,
     cloudRepo,
-    userId: userId,
+    userId: userId,  // transmitem direct aici
   );
 });

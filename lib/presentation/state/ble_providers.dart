@@ -1,3 +1,5 @@
+// lib/presentation/state/ble_providers.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/ble/ble_service.dart';
 import '../../domain/model/ble_event.dart';
@@ -16,6 +18,5 @@ final bleEventStreamProvider = StreamProvider<BleEvent>((ref) async* {
   print('[ble_providers] ▶️ Pornesc initAndStart() BleService …');
   await bleService.initAndStart();
   print('[ble_providers] ✅ BleService initAndStart() s-a încheiat. Emit evenimente…');
-
   yield* bleService.bleEventStream;
 });
