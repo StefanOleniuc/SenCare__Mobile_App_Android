@@ -49,35 +49,38 @@ class CloudRepositoryImpl implements CloudRepository {
   Future<List<Recommendation>> fetchRecommendations(String userId) {
     return _api.fetchRecommendationsMobile(userId);
   }
-  Future<void> sendAlarmHistory(Map<String, dynamic> payload);
+
+  @override
+  Future<List<AlarmModel>> fetchAlarms(String patientId) {
+    return _api.fetchAlarms(patientId);
+  }
+
+  @override
+  Future<void> postAlarm(AlarmModel alarm) {
+    return _api.postAlarm(alarm);
+  }
+
+  @override
+  Future<NormalValues> fetchNormalValues(String userId) {
+    return _api.fetchNormalValuesMobile(userId);
+  }
+
+  // trimite istoric alarmă
   @override
   Future<void> sendAlarmHistory({
-    required int userId,
-    int? alarmaId,
+    required String userId,
+    required int alarmaId,
     required String tipAlarma,
     required String descriere,
     required String actiune,
   }) async {
     final payload = {
-      'userId': userId,
-      'alarmaId': alarmaId,
-      'tipAlarma': tipAlarma,
-      'descriere': descriere,
-      'actiune': actiune,
+      "userId": int.parse(userId),
+      "alarmaId": alarmaId,
+      "tipAlarma": tipAlarma,
+      "descriere": descriere,
+      "actiune": actiune,
     };
-    print("🐞 [CloudRepository] Trimit istoric alarmă: $payload");
-
-    try {
-      // Folosește metoda din ApiService pentru a trimite istoric alarmă
-      await _api.sendAlarmHistoryMobile(payload);
-      print('✅ Istoric alarmă trimis cu succes');
-    } catch (e) {
-      print('❌ [CloudRepository] Eroare la trimitere istoric alarmă: $e');
-      rethrow;
-    }
-  }
-  @override
-  Future<NormalValues> fetchNormalValues(String userId) {
-    return _api.fetchNormalValuesMobile(userId);
+    await _api.sendAlarmHistoryMobile(payload);
   }
 }

@@ -155,6 +155,31 @@ class _ApiService implements ApiService {
   }
 
   @override
+  Future<void> sendAlarmHistoryMobile(Map<String, dynamic> payload) async {
+    const _extra = <String, dynamic>{};
+    final queryParameters = <String, dynamic>{};
+    final _headers = <String, dynamic>{};
+    final _data = <String, dynamic>{};
+    _data.addAll(payload);
+    await _dio.fetch<void>(_setStreamType<void>(Options(
+      method: 'POST',
+      headers: _headers,
+      extra: _extra,
+    )
+        .compose(
+          _dio.options,
+          '/api/mobile/istoric-alarme',
+          queryParameters: queryParameters,
+          data: _data,
+        )
+        .copyWith(
+            baseUrl: _combineBaseUrls(
+          _dio.options.baseUrl,
+          baseUrl,
+        ))));
+  }
+
+  @override
   Future<void> postAlarm(AlarmModel alarm) async {
     const _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{};

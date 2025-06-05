@@ -12,10 +12,10 @@ import '../state/usecase_providers.dart';
 import '../state/auth_provider.dart';
 import '../state/normal_values_provider.dart';
 import '../state/alarm_provider.dart';
+import '../state/send_alarm_usecase_provider.dart'; // <--- NOU!
 import '../../domain/model/ble_event.dart';
 import '../../domain/model/normal_values.dart';
 import '../../domain/model/alarm_model.dart';
-import '../../data/cloud/cloud_repository_impl.dart';
 import 'recommendation_screen.dart';
 import 'calendar_activitati_screen.dart';
 
@@ -40,7 +40,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _alarmShowing = false;
   NormalValues? _normalValues;
   List<AlarmModel> _alarme = [];
-  late final CloudRepositoryImpl _cloudRepo = CloudRepositoryImpl();
 
   @override
   void initState() {
@@ -670,27 +669,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// FOARTE IMPORTANT: doar apelează usecase-ul, nu implementa logică API aici!
   Future<void> _sendAlarmToCloud(
       String tip,
       SensorEvent? event,
       String userMessage,
       ) async {
     final authState = ref.read(authStateProvider);
-    final userId = int.tryParse(authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '0')) ?? 0;
+    final userId = authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '');
 
-    // 1. Trimite date fiziologice (folosește sendBurstData!)
-    if (event != null) {
-      await _cloudRepo.sendBurstData(
-        userId: userId,
-        puls: event.bpm,
-        temperatura: event.temp,
-        umiditate: event.hum,
-        ecg: _ecgBuffer.map((f) => f.y).toList(),
-        dataTimp: DateTime.now(),
-      );
-    }
+    if (event == null) return;
 
-    // 2. Găsește modelul de alarmă după tip
+    // 1. Găsește modelul de alarmă după tip
     AlarmModel? foundModel;
     try {
       foundModel = _alarme.firstWhere((a) => a.tipAlarma == tip);
@@ -698,13 +688,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    // 3. Trimite istoric alarmă
-    await _cloudRepo.sendAlarmHistory(
+    // 2. Apelează usecase-ul de trimitere alarmă (care se ocupă de tot)
+    await ref.read(sendAlarmUseCaseProvider).call(
       userId: userId,
-      alarmaId: foundModel.alarmaId == -1 ? null : foundModel.alarmaId,
+      event: event,
+      ecg: _ecgBuffer.map((f) => f.y).toList(),
+      alarm: foundModel,
       tipAlarma: tip,
-      descriere: "${foundModel.descriere}${userMessage.isNotEmpty ? '\n[Utilizator]: $userMessage' : ''}",
-      actiune: 'confirmata_de_utilizator',
+      userMessage: userMessage,
     );
   }
 

@@ -23,4 +23,13 @@ abstract class CloudRepository {
 
   // 5) NORMAL VALUES
   Future<NormalValues> fetchNormalValues(String userId);
+
+  // 6) TRIMITE ISTORIC ALARMĂ
+  Future<void> sendAlarmHistory({
+    required String userId,
+    required int alarmaId,
+    required String tipAlarma,
+    required String descriere,
+    required String actiune,
+  });
 }
