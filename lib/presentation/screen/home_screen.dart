@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:dio/dio.dart';
 
 import '../../data/accelerometer/accelerometer_service.dart';
 import '../state/ble_providers.dart';
@@ -16,6 +15,7 @@ import '../state/alarm_provider.dart';
 import '../../domain/model/ble_event.dart';
 import '../../domain/model/normal_values.dart';
 import '../../domain/model/alarm_model.dart';
+import '../../data/cloud/cloud_repository_impl.dart';
 import 'recommendation_screen.dart';
 import 'calendar_activitati_screen.dart';
 
@@ -27,55 +27,58 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  // -- Buffere pentru logica cerută --
-  final List<SensorEvent> _sensorSnapshots = []; // ultimile 3 snapshoturi (la 10s)
-  final List<double> _ecgBuffer = []; // ultimele 200 valori (10s la 50ms)
-  final List<double> _accelBuffer = []; // pentru corelări locale
-
-  SensorEvent? _lastSensorSnapshot;
-
+  final List<FlSpot> _ecgBuffer = [];
+  double _currentX = 0.0;
   int _latestBpm = 0;
   double _latestTemp = 0;
   double _latestHum = 0;
-
   bool _permisiiCerute = false;
   late AccelerometerService _accelService;
-
-  Timer? _batchTimer;
   Timer? _alarmTimer;
-  bool _alarmDialogShown = false;
-  String? _lastAlarmType;
-  DateTime? _lastAlarmTime;
-
+  List<SensorEvent> _last10sEvents = [];
+  bool _isRunning = false;
+  bool _alarmShowing = false;
   NormalValues? _normalValues;
   List<AlarmModel> _alarme = [];
+  late final CloudRepositoryImpl _cloudRepo = CloudRepositoryImpl();
 
   @override
   void initState() {
     super.initState();
-
     _accelService = AccelerometerService();
     _accelService.start((event) {
-      // Buffer accel local pentru corelare (ex: running)
       final magnitude = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-      _accelBuffer.add(magnitude);
-      if (_accelBuffer.length > 30) _accelBuffer.removeAt(0);
+      _isRunning = magnitude > 8.0;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initBleAndFetchCloud();
+      await _initBleAndBatch();
 
-      _alarmTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-        // NIMIC: alarma/avertizare se verifică la fiecare snapshot, nu la timer!
-      });
+      final authState = ref.read(authStateProvider);
+      final userId = authState.maybeWhen(
+        authenticated: (id) => id.toString(),
+        orElse: () => '',
+      );
 
-      // Batch la 30s
-      _batchTimer = Timer.periodic(const Duration(seconds: 30), (_) => _sendBatchToCloud());
+      if (userId.isNotEmpty) {
+        try {
+          final normal = await ref.read(normalValuesProvider(userId).future);
+          _normalValues = normal;
+        } catch (_) {}
+        try {
+          final alarme = await ref.read(alarmsProvider(userId).future);
+          _alarme = alarme;
+        } catch (_) {}
+        setState(() {});
+      }
+
+      _alarmTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkAlarms());
+      // Batch la 30s orchestrat din provider/usecase
       ref.read(sendBatchUseCaseProvider).start();
     });
   }
 
-  Future<void> _initBleAndFetchCloud() async {
+  Future<void> _initBleAndBatch() async {
     if (_permisiiCerute) return;
     _permisiiCerute = true;
 
@@ -101,31 +104,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     ref.refresh(bleEventStreamProvider);
-
-    // Fetch valori normale și alarme
-    final authState = ref.read(authStateProvider);
-    final userId = authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '');
-    if (userId.isNotEmpty) {
-      try {
-        _normalValues = await ref.read(normalValuesProvider(userId).future);
-        debugPrint("🟢 Valorile normale preluate din cloud: $_normalValues");
-      } catch (e) {
-        debugPrint("🔴 Eroare la fetch valori normale: $e");
-      }
-      try {
-        _alarme = await ref.read(alarmsProvider(userId).future);
-        debugPrint("🟢 Alarme/avertizari preluate din cloud: $_alarme");
-      } catch (e) {
-        debugPrint("🔴 Eroare la fetch alarme: $e");
-      }
-      setState(() {});
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final bleAsync = ref.watch(bleEventStreamProvider);
-
     final authState = ref.watch(authStateProvider);
     final userId = authState.maybeWhen(
       authenticated: (id) => id.toString(),
@@ -163,11 +146,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: bleAsync.when(
                       data: (BleEvent event) {
                         if (event is SensorEvent) {
-                          _onSensorEvent(event);
+                          _latestBpm = event.bpm;
+                          _latestTemp = event.temp;
+                          _latestHum = event.hum;
+                          _last10sEvents.add(event);
+                          if (_last10sEvents.length > 10) {
+                            _last10sEvents.removeAt(0);
+                          }
                         } else if (event is EkgEvent) {
-                          _onEkgEvent(event);
+                          final ekgValue = event.ekg;
+                          _ecgBuffer.add(FlSpot(_currentX, ekgValue));
+                          _currentX += 1.0;
+                          if (_ecgBuffer.length > 200) {
+                            _ecgBuffer.removeAt(0);
+                          }
                         }
-
                         return SingleChildScrollView(
                           physics: const BouncingScrollPhysics(),
                           child: Column(
@@ -178,7 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               _buildSensorCard(
                                 icon: Icons.monitor_heart,
                                 title: 'Puls',
-                                value: '${_latestBpm} BPM',
+                                value: '$_latestBpm BPM',
                                 color: Colors.green,
                               ),
                               const SizedBox(height: 16),
@@ -477,11 +470,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEcgChartCard() {
-    // Pentru UI: doar 200 de valori, ca înainte
-    List<FlSpot> flspots = [];
-    for (int i = 0; i < _ecgBuffer.length; i++) {
-      flspots.add(FlSpot(i.toDouble(), _ecgBuffer[i]));
-    }
     return SizedBox(
       height: 200,
       child: Card(
@@ -512,20 +500,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               lineBarsData: [
                 LineChartBarData(
-                  spots: flspots,
+                  spots: _ecgBuffer,
                   isCurved: false,
                   color: Colors.redAccent,
                   barWidth: 2,
                   dotData: FlDotData(show: false),
                 ),
               ],
-              minX: flspots.isNotEmpty ? flspots.first.x : 0,
-              maxX: flspots.isNotEmpty ? flspots.last.x : 0,
-              minY: flspots.isNotEmpty
-                  ? flspots.map((e) => e.y).reduce(min)
+              minX: _ecgBuffer.isNotEmpty ? _ecgBuffer.first.x : 0,
+              maxX: _ecgBuffer.isNotEmpty ? _ecgBuffer.last.x : 0,
+              minY: _ecgBuffer.isNotEmpty
+                  ? _ecgBuffer.map((e) => e.y).reduce(min)
                   : 0,
-              maxY: flspots.isNotEmpty
-                  ? flspots.map((e) => e.y).reduce(max)
+              maxY: _ecgBuffer.isNotEmpty
+                  ? _ecgBuffer.map((e) => e.y).reduce(max)
                   : 1,
             ),
           ),
@@ -534,154 +522,133 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // ==== Buffer update la fiecare eveniment nou ====
-  void _onSensorEvent(SensorEvent event) {
-    _latestBpm = event.bpm;
-    _latestTemp = event.temp;
-    _latestHum = event.hum;
+  void _checkAlarms() async {
+    if (_alarmShowing) return;
+    if (_normalValues == null) return;
+    if (_last10sEvents.isEmpty) return;
 
-    _sensorSnapshots.add(event);
-    if (_sensorSnapshots.length > 3) _sensorSnapshots.removeAt(0);
-
-    _lastSensorSnapshot = event;
-
-    _checkAlarmOrWarning(event);
-  }
-
-  void _onEkgEvent(EkgEvent event) {
-    _ecgBuffer.add(event.ekg);
-    if (_ecgBuffer.length > 200) _ecgBuffer.removeAt(0);
-  }
-
-  // ========== BATCH CLOUD ==========
-  Future<void> _sendBatchToCloud() async {
-    if (_sensorSnapshots.length < 3) return;
-
-    final mediaPuls = _sensorSnapshots.map((e) => e.bpm).reduce((a, b) => a + b) / 3;
-    final mediaTemp = _sensorSnapshots.map((e) => e.temp).reduce((a, b) => a + b) / 3;
-    final mediaUmid = _sensorSnapshots.map((e) => e.hum).reduce((a, b) => a + b) / 3;
-    final ecgBurst = List<double>.from(_ecgBuffer);
-
-    final authState = ref.read(authStateProvider);
-    final userId = authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '');
-
-    final data = {
-      'userId': userId,
-      'puls': mediaPuls,
-      'temperatura': mediaTemp,
-      'umiditate': mediaUmid,
-      'ecgBurst': ecgBurst,
-      'data_timp': DateTime.now().toIso8601String(),
-    };
-    try {
-      debugPrint("🐞 [BATCH] 📤 Trimit batch la 30s: $data");
-      await Dio().post('https://sencareapp-backend.azurewebsites.net/api/mobile/datefiziologice', data: data);
-      debugPrint("🐞 [BATCH] ✅ Batch trimis!");
-    } catch (e) {
-      debugPrint("🐞 [BATCH] ❌ Eroare batch: $e");
-    }
-  }
-
-  // ========== ALARMĂ/AVERTIZARE ==========
-  void _checkAlarmOrWarning(SensorEvent event) async {
-    if (_normalValues == null || _alarmDialogShown) return;
-
-    final act = _analyzeEvent(event, _normalValues!, _accelBuffer);
-    if (act == null) return;
-
-    final now = DateTime.now();
-    if (_lastAlarmType == act && _lastAlarmTime != null && now.difference(_lastAlarmTime!) < const Duration(seconds: 60)) {
+    final last = _last10sEvents.last;
+    if (last.bpm == 0) {
+      _last10sEvents.clear();
       return;
     }
-    _lastAlarmType = act;
-    _lastAlarmTime = now;
-    _alarmDialogShown = true;
 
-    await _sendInstantToCloud(event, List<double>.from(_ecgBuffer));
+    final int pulsMin = _normalValues!.pulsMin;
+    final int pulsMax = _normalValues!.pulsMax;
+    final int pulsMaxInMiscar = pulsMax + 20;
 
-    final tipAlarm = act;
-    final foundAlarm = _alarme.firstWhere(
-          (a) => a.tipAlarma == tipAlarm,
-      orElse: () => AlarmModel(
-        alarmaId: -1,
-        pacientId: -1,
-        tipAlarma: tipAlarm,
-        descriere: "⚠️ Fără descriere!",
-      ),
-    );
-    await _showAlarmDialog(
-      tipAlarm,
-      foundAlarm.descriere,
-      foundAlarm,
-      event,
-    );
-    _alarmDialogShown = false;
-  }
-
-  String? _analyzeEvent(SensorEvent event, NormalValues normal, List<double> accelBuffer) {
-    bool running = _isRunning(accelBuffer);
-
-    int pmin = normal.pulsMin;
-    int pmax = running ? normal.pulsMax + 20 : normal.pulsMax;
-    if (event.bpm < pmin || event.bpm > pmax) return 'Alarma Puls';
-    if ((event.bpm - pmin).abs() <= 5 || (event.bpm - pmax).abs() <= 5) return 'Avertizare Puls';
-
-    double tmin = normal.temperaturaMin;
-    double tmax = normal.temperaturaMax;
-    if (event.temp < tmin || event.temp > tmax) return 'Alarma Temperatura';
-    if ((event.temp - tmin).abs() <= 0.5 || (event.temp - tmax).abs() <= 0.5) return 'Avertizare Temperatura';
-
-    double umin = normal.umiditateMin;
-    double umax = normal.umiditateMax;
-    if (event.hum < umin || event.hum > umax) return 'Alarma Umiditate';
-    if ((event.hum - umin).abs() <= 2 || (event.hum - umax).abs() <= 2) return 'Avertizare Umiditate';
-
-    return null;
-  }
-
-  bool _isRunning(List<double> accelBuffer) {
-    if (accelBuffer.isEmpty) return false;
-    final mean = accelBuffer.reduce((a, b) => a + b) / accelBuffer.length;
-    return mean > 8.0;
-  }
-
-  Future<void> _sendInstantToCloud(SensorEvent event, List<double> ecgBurst) async {
-    final authState = ref.read(authStateProvider);
-    final userId = authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '');
-
-    final data = {
-      'userId': userId,
-      'puls': event.bpm,
-      'temperatura': event.temp,
-      'umiditate': event.hum,
-      'ecgBurst': ecgBurst,
-      'data_timp': DateTime.now().toIso8601String(),
-    };
-    try {
-      debugPrint("🐞 [INSTANT] 📤 Trimit date instant la alarmă: $data");
-      await Dio().post('https://sencareapp-backend.azurewebsites.net/api/mobile/datefiziologice', data: data);
-      debugPrint("🐞 [INSTANT] ✅ Date instant trimise!");
-    } catch (e) {
-      debugPrint("🐞 [INSTANT] ❌ Eroare la trimiterea datelor instant: $e");
+    if (_isRunning) {
+      if (last.bpm > pulsMaxInMiscar) {
+        _alarmShowing = true;
+        await _showAlarmDialog(
+          'Alarmă Puls',
+          'Pulsul e mult prea ridicat chiar și în mișcare!',
+          'Alarma Puls',
+          last,
+        );
+        _last10sEvents.clear();
+        return;
+      } else {
+        _last10sEvents.clear();
+        return;
+      }
+    } else {
+      if (last.bpm < pulsMin || last.bpm > pulsMax) {
+        _alarmShowing = true;
+        await _showAlarmDialog(
+          'Alarmă Puls',
+          'Pulsul este în afara limitelor!',
+          'Alarma Puls',
+          last,
+        );
+        _last10sEvents.clear();
+        return;
+      } else if ((last.bpm - pulsMin).abs() <= 5 || (last.bpm - pulsMax).abs() <= 5) {
+        _alarmShowing = true;
+        await _showAlarmDialog(
+          'Avertizare Puls',
+          'Pulsul este aproape de limită.',
+          'Avertizare Puls',
+          last,
+        );
+        _last10sEvents.clear();
+        return;
+      }
     }
+
+    final double tempMin = _normalValues!.temperaturaMin;
+    final double tempMax = _normalValues!.temperaturaMax;
+    if (last.temp < tempMin || last.temp > tempMax) {
+      _alarmShowing = true;
+      await _showAlarmDialog(
+        'Alarmă Temperatura',
+        'Temperatura este în afara limitelor!',
+        'Alarma Temperatura',
+        last,
+      );
+      _last10sEvents.clear();
+      return;
+    } else if ((last.temp - tempMin).abs() <= 0.5 || (last.temp - tempMax).abs() <= 0.5) {
+      _alarmShowing = true;
+      await _showAlarmDialog(
+        'Avertizare Temperatura',
+        'Temperatura este aproape de limită.',
+        'Avertizare Temperatura',
+        last,
+      );
+      _last10sEvents.clear();
+      return;
+    }
+
+    final double humMin = _normalValues!.umiditateMin;
+    final double humMax = _normalValues!.umiditateMax;
+    if (last.hum < humMin || last.hum > humMax) {
+      _alarmShowing = true;
+      await _showAlarmDialog(
+        'Alarmă Umiditate',
+        'Umiditatea este în afara limitelor!',
+        'Alarma Umiditate',
+        last,
+      );
+      _last10sEvents.clear();
+      return;
+    } else if ((last.hum - humMin).abs() <= 2 || (last.hum - humMax).abs() <= 2) {
+      _alarmShowing = true;
+      await _showAlarmDialog(
+        'Avertizare Umiditate',
+        'Umiditatea este aproape de limită.',
+        'Avertizare Umiditate',
+        last,
+      );
+      _last10sEvents.clear();
+      return;
+    }
+
+    _last10sEvents.clear();
   }
 
   Future<void> _showAlarmDialog(
-      String tipAlarm, String descriere, AlarmModel alarm, SensorEvent event) async {
+      String title,
+      String content,
+      String tip,
+      SensorEvent? event,
+      ) async {
+    _alarmShowing = true;
     String userMessage = '';
+
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Text("🚨 $tipAlarm"),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text("📝 $descriere"),
+            Text(content),
             const SizedBox(height: 12),
             TextField(
               decoration: const InputDecoration(
-                labelText: 'Notează un mesaj suplimentar (opțional)',
+                labelText: 'Mesaj asociat (opțional)',
                 border: OutlineInputBorder(),
               ),
               onChanged: (val) => userMessage = val,
@@ -693,7 +660,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await _sendAlarmToCloud(tipAlarm, alarm, event, userMessage);
+              await _sendAlarmToCloud(tip, event, userMessage);
+              _alarmShowing = false;
             },
             child: const Text('Trimite'),
           ),
@@ -703,36 +671,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _sendAlarmToCloud(
-      String tipAlarm, AlarmModel alarm, SensorEvent event, String userMessage) async {
+      String tip,
+      SensorEvent? event,
+      String userMessage,
+      ) async {
     final authState = ref.read(authStateProvider);
-    final userId = authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '');
+    final userId = int.tryParse(authState.maybeWhen(authenticated: (id) => id.toString(), orElse: () => '0')) ?? 0;
 
-    final dataIstoric = {
-      'userId': userId,
-      'alarmaId': alarm.alarmaId,
-      'tipAlarma': tipAlarm,
-      'descriere': "${alarm.descriere}${userMessage.isNotEmpty ? '\n[Utilizator]: $userMessage' : ''}",
-      'actiune': 'confirmata_de_utilizator',
-      'data_timp': DateTime.now().toIso8601String(),
-    };
-    try {
-      debugPrint("🐞 [ISTORIC] 📤 Trimit istoric alarmă: $dataIstoric");
-      await Dio().post('https://sencareapp-backend.azurewebsites.net/api/mobile/istoric-alarme', data: dataIstoric);
-      debugPrint("🐞 [ISTORIC] ✅ Istoric alarmă trimis!");
-    } catch (e) {
-      debugPrint("🐞 [ISTORIC] ❌ Eroare la trimiterea în istoric alarme: $e");
+    // 1. Trimite date fiziologice (folosește sendBurstData!)
+    if (event != null) {
+      await _cloudRepo.sendBurstData(
+        userId: userId,
+        puls: event.bpm,
+        temperatura: event.temp,
+        umiditate: event.hum,
+        ecg: _ecgBuffer.map((f) => f.y).toList(),
+        dataTimp: DateTime.now(),
+      );
     }
+
+    // 2. Găsește modelul de alarmă după tip
+    AlarmModel? foundModel;
+    try {
+      foundModel = _alarme.firstWhere((a) => a.tipAlarma == tip);
+    } catch (_) {
+      return;
+    }
+
+    // 3. Trimite istoric alarmă
+    await _cloudRepo.sendAlarmHistory(
+      userId: userId,
+      alarmaId: foundModel.alarmaId == -1 ? null : foundModel.alarmaId,
+      tipAlarma: tip,
+      descriere: "${foundModel.descriere}${userMessage.isNotEmpty ? '\n[Utilizator]: $userMessage' : ''}",
+      actiune: 'confirmata_de_utilizator',
+    );
   }
 
   @override
   void dispose() {
-    _batchTimer?.cancel();
     _alarmTimer?.cancel();
     _accelService.stop();
     super.dispose();
   }
 }
 
+// Painter de fundal cu puncte subtile
 class _BackgroundDotsPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

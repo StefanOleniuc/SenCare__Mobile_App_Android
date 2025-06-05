@@ -36,6 +36,9 @@ abstract class ApiService {
   @GET('/api/alarms/{patientId}')
   Future<List<AlarmModel>> fetchAlarms(@Path('patientId') String patientId);
 
+  @POST('/api/mobile/istoric-alarme')
+  Future<void> sendAlarmHistoryMobile(@Body() Map<String, dynamic> payload);
+
   @POST('/api/alarms')
   Future<void> postAlarm(@Body() AlarmModel alarm);
 
